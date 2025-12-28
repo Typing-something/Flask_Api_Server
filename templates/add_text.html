@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>새 글 추가하기</title>
+</head>
+<body>
+    <h1>타자 연습 데이터 추가</h1>
+    <form action="/text/add" method="POST">
+        <label>장르:</label><br>
+        <select name="genre">
+            <option value="proverb">명언</option>
+            <option value="poem">시</option>
+            <option value="novel">소설</option>
+            <option value="k-pop">K-POP</option>
+        </select><br><br>
+
+        <label>제목:</label><br>
+        <input type="text" name="title" required><br><br>
+
+        <label>작가:</label><br>
+        <input type="text" name="author"><br><br>
+
+        <label>본문 내용:</label><br>
+        <textarea name="content" rows="10" cols="50" required></textarea><br><br>
+
+        <button type="submit">DB에 저장하기</button>
+    </form>
+    <br>
+    <a href="/text/main">목록으로 돌아가기</a>
+</body>
+</html>
