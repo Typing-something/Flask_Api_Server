@@ -3,7 +3,8 @@ import sys
 import os
 
 # 1. 부모 디렉토리(루트)를 경로에 추가 (app, database 등을 불러오기 위함)
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+# sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append(os.getcwd())
 
 from app import app
 from database import db
@@ -11,12 +12,7 @@ from models import TypingText
 
 def seed_texts():
     """초기 샘플 데이터를 DB에 삽입하는 함수"""
-    samples = [
-        TypingText(genre='proverb', title='공자', author='공자', content='배우고 때로 익히면 또한 즐겁지 아니한가.'),
-        TypingText(genre='poem', title='서시', author='윤동주', content='죽는 날까지 하늘을 우러러 한 점 부끄럼 없기를...'),
-        TypingText(genre='novel', title='어린왕자', author='생텍쥐페리', content='가장 중요한 것은 눈에 보이지 않아.'),
-        # 여기에 추가하고 싶은 데이터를 마음껏 넣으세요!
-    ]
+ 
 
     samples = [
     TypingText(genre='proverb', title='공자', author='공자', content='배우고 때로 익히면 또한 즐겁지 아니한가.'),

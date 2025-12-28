@@ -1,11 +1,22 @@
+import os
+import boto3
+import uuid
 from flask import Blueprint, jsonify, request, render_template, redirect, url_for
 from database import db
 from models import TypingText, TypingResult, User
 from datetime import datetime
 
+# S3 클라이언트 설정 (환경변수 로드)
+s3 = boto3.client('s3',
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+    region_name=os.environ.get('AWS_REGION', 'ap-northeast-2')
+)
+BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+
 text_blueprint = Blueprint('text', __name__)
 
-# 0. 글쓰기 페이지 (HTML 폼 제공 및 저장)
+# 0. 글쓰기 페이지 (HTML 폼 제공 및 저장 - 이미지 업로드 기능 추가)
 @text_blueprint.route('/add', methods=['GET', 'POST'])
 def add_text():
     """
@@ -15,8 +26,8 @@ def add_text():
       - Text
     description: |
       **사용 방법:**
-      - **GET**: `http://localhost:5000/text/add` 접속 시 글쓰기 화면 출력
-      - **POST**: HTML 폼 데이터를 전송하여 DB에 저장
+      - **GET**: `/text/add` 접속 시 글쓰기 화면 출력
+      - **POST**: HTML 폼 데이터와 이미지 파일을 전송하여 DB 및 S3에 저장
     parameters:
       - name: genre
         in: formData
@@ -37,7 +48,11 @@ def add_text():
         type: string
         required: true
         description: 타자 연습용 전체 본문
-    responses:
+      - name: image
+        in: formData
+        type: file
+        description: 글과 매칭될 대표 이미지 (S3 업로드)
+         responses:
       302:
         description: 저장 후 메인 리다이렉트
       200:
@@ -48,8 +63,40 @@ def add_text():
         title = request.form.get('title')
         author = request.form.get('author')
         content = request.form.get('content')
+        
+        # 1. 이미지 파일 처리
+        image_file = request.files.get('image')
+        image_url = None
 
-        new_entry = TypingText(genre=genre, title=title, author=author, content=content)
+        if image_file and image_file.filename != '':
+            # 파일명 난수화 (UUID)
+            ext = image_file.filename.rsplit('.', 1)[1].lower()
+            filename = f"texts/{uuid.uuid4()}.{ext}"
+            
+            try:
+                # 2. S3 업로드 실행
+                s3.upload_fileobj(
+                    image_file,
+                    BUCKET_NAME,
+                    filename,
+                    ExtraArgs={
+                        "ContentType": image_file.content_type,
+                        "ACL": "public-read"
+                    }
+                )
+                # 3. S3 URL 생성
+                image_url = f"https://{BUCKET_NAME}.s3.{os.environ.get('AWS_REGION', 'ap-northeast-2')}.amazonaws.com/{filename}"
+            except Exception as e:
+                print(f"S3 Upload Error: {e}")
+
+        # 4. DB 저장
+        new_entry = TypingText(
+            genre=genre, 
+            title=title, 
+            author=author, 
+            content=content,
+            image_url=image_url
+        )
         db.session.add(new_entry)
         db.session.commit()
         return redirect(url_for('text.get_main_texts')) 
@@ -66,19 +113,20 @@ def get_main_texts():
     tags:
       - Text
     description: |
-      **요청 URL:** `GET http://localhost:5000/text/main`
-      - 메인 화면에 뿌려줄 요약된 글 목록을 가져옵니다.
+      **요청 URL:** `GET /text/main`
+      - 메인 화면에 뿌려줄 요약된 글 목록을 가져옵니다. (이미지 URL 포함)
     responses:
       200:
-        description: 본문 50자 요약이 포함된 리스트 반환
+        description: 본문 요약 및 이미지 URL이 포함된 리스트 반환
     """
-    texts = TypingText.query.limit(10).all()
+    texts = TypingText.query.order_by(TypingText.id.desc()).limit(10).all()
     return jsonify([{
         "id": t.id,
         "genre": t.genre,
         "title": t.title,
         "author": t.author,
-        "content": t.content[:50] + "..."
+        "content": t.content[:50] + "...",
+        "image_url": t.image_url
     } for t in texts]), 200
 
 
@@ -93,8 +141,7 @@ def get_texts_by_genre():
     description: |
       **요청 URL 예시:**
       - 전체 조회: `GET /text/`
-      - K-POP만 조회: `GET /text/?genre=k-pop`
-      - 시만 조회: `GET /text/?genre=poem`
+      - 장르 필터 조회: `GET /text/?genre=k-pop`
     parameters:
       - name: genre
         in: query
@@ -102,7 +149,7 @@ def get_texts_by_genre():
         description: 필터링할 장르명
     responses:
       200:
-        description: 본문을 제외한 제목 위주의 리스트 반환
+        description: 제목 및 이미지 URL 위주의 리스트 반환
     """
     genre_param = request.args.get('genre')
     if genre_param:
@@ -111,7 +158,11 @@ def get_texts_by_genre():
         texts = TypingText.query.all()
         
     return jsonify([{
-        "id": t.id, "genre": t.genre, "title": t.title, "author": t.author
+        "id": t.id, 
+        "genre": t.genre, 
+        "title": t.title, 
+        "author": t.author,
+        "image_url": t.image_url
     } for t in texts]), 200
 
 
@@ -125,7 +176,7 @@ def get_text_by_id(text_id):
       - Text
     description: |
       **요청 URL 예시:** `GET /text/1?user_id=5`
-      - 특정 글의 본문 전체와 해당 유저의 최고 기록을 함께 가져옵니다.
+      - 특정 글의 본문 전체와 이미지 URL, 해당 유저의 최고 기록을 함께 가져옵니다.
     parameters:
       - name: text_id
         in: path
@@ -137,7 +188,7 @@ def get_text_by_id(text_id):
         description: 내 최고기록을 조회하고 싶을 때 포함
     responses:
       200:
-        description: 글 상세 정보와 기록 데이터
+        description: 글 상세 정보(이미지 포함)와 기록 데이터
     """
     t = TypingText.query.get_or_404(text_id)
     u_id = request.args.get('user_id')
@@ -152,10 +203,16 @@ def get_text_by_id(text_id):
                 "accuracy": best.accuracy, "date": best.created_at.strftime('%Y-%m-%d')
             }
     return jsonify({
-        "text_info" : {"id": t.id, "genre": t.genre, "title": t.title, "author": t.author, "content": t.content}, 
+        "text_info" : {
+            "id": t.id, 
+            "genre": t.genre, 
+            "title": t.title, 
+            "author": t.author, 
+            "content": t.content,
+            "image_url": t.image_url
+        }, 
         "my_best": best_record
     }), 200
-
 
 # 4. 타자 결과 저장
 @text_blueprint.route('/results', methods=['POST'])

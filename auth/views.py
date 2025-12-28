@@ -2,6 +2,8 @@ from flask import Blueprint, request, redirect, url_for, jsonify
 from models import User, db
 from flask_login import login_user, logout_user, login_required, current_user
 
+
+
 auth_blueprint = Blueprint('auth', __name__)
 
 # --- 1. 구글 로그인 처리 API ---

@@ -32,6 +32,8 @@ class TypingText(db.Model):
     author = db.Column(db.String(100))
     content = db.Column(db.Text, nullable=False)
 
+    image_url = db.Column(db.String(500), nullable=True)
+
     def __repr__(self):
         return f'<TypingText {self.title}>'
 
