@@ -27,14 +27,23 @@ else:
     CORS(app)
 
 # 1. 설정 (Configuration) => sqllite로 변환
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # 불필요한 오버헤드 방지
-app.secret_key = 'your_secret_key'
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(BASE_DIR, 'local.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')
+
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'
+# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # 불필요한 오버헤드 방지
+# app.secret_key = 'your_secret_key'
 
 # 2. 로깅 설정
 app.logger.setLevel(logging.DEBUG)
 logging.basicConfig(filename='application.log', level=logging.DEBUG, 
                     format='%(asctime)s:%(levelname)s:%(message)s')
+
+
 
 # 3. 확장 도구 초기화
 login_manager = LoginManager()
