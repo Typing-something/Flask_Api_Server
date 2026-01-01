@@ -15,7 +15,7 @@ from models import User, TypingText
 from auth.views import auth_blueprint
 from main.views import main_blueprint
 from text.views import text_blueprint
-
+from user.views import user_blueprint
 app = Flask(__name__)
 ENV = os.getenv('FLASK_ENV', 'development')
 
@@ -70,13 +70,18 @@ if ENV == 'production':
 else:
     app.logger.setLevel(logging.DEBUG)
 
-logging.basicConfig(filename='application.log', level=logging.DEBUG, 
-                    format='%(asctime)s:%(levelname)s:%(message)s')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s:%(levelname)s:%(message)s'
+)
 
 # 6. 블루프린트 등록
 app.register_blueprint(auth_blueprint, url_prefix='/auth')
 app.register_blueprint(main_blueprint, url_prefix='/')
 app.register_blueprint(text_blueprint, url_prefix='/text')
+app.register_blueprint(user_blueprint, url_prefix='/user')
+
+
 
 # 7. 사용자 로드 함수
 @login_manager.user_loader
@@ -87,6 +92,12 @@ def load_user(user_id):
 @app.route('/favicon.ico')
 def favicon():
     return ('', 204)
+
+@app.route('/crash')
+def crash():
+    app.logger.info("!!! 사용자가 /crash를 호출함: 서버를 강제 종료합니다 !!!")
+    import os
+    os._exit(1)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

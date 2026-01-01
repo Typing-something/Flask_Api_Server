@@ -1,8 +1,8 @@
-from flask import Blueprint, request, redirect, url_for, jsonify
+from flask import Blueprint, request, redirect, url_for, jsonify , current_app
 from models import User, db
 from flask_login import login_user, logout_user, login_required, current_user
-
-
+from utils import api_response
+import uuid
 
 auth_blueprint = Blueprint('auth', __name__)
 
@@ -10,57 +10,78 @@ auth_blueprint = Blueprint('auth', __name__)
 @auth_blueprint.route('/google', methods=['POST'])
 def google_login():
     """
-    구글 소셜 로그인 처리 API
+    구글 소셜 로그인/회원가입 API (이메일 기준)
     ---
     tags:
       - Auth
     description: |
       **요청 URL:** `POST /auth/google`
-      **동작:** 프론트엔드에서 받은 구글 유저 정보를 바탕으로 회원가입 또는 로그인을 처리합니다.
-      **JSON Body 예시:**
-      ```json
-      {
-        "google_id": "1029384756",
-        "email": "user@gmail.com",
-        "username": "홍길동"
-      }
-      ```
+      - 프론트엔드가 보낸 이메일을 기준으로 신규 유저는 가입, 기존 유저는 로그인을 처리합니다.
     parameters:
       - name: body
         in: body
         required: true
         schema:
           properties:
-            google_id: {type: string, example: "1029384756"}
             email: {type: string, example: "user@gmail.com"}
             username: {type: string, example: "홍길동"}
+            profile_pic: {type: string, example: "https://photo.url/..."}
     responses:
       200:
-        description: 로그인 성공
-      400:
-        description: 필수 정보 누락
+        description: 성공 (user_id 반환)
     """
-    data = request.get_json()
-    google_id = data.get('google_id')
-    email = data.get('email')
-    username = data.get('username')
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        username = data.get('username', 'User') # 이름이 없을 경우 기본값
+        profile_pic = data.get('profile_pic')
 
-    if not google_id or not email:
-        return jsonify({"error": "필수 정보가 누락되었습니다."}), 400
+        if not email:
+            return api_response(success=False, message="이메일 정보가 누락되었습니다.", status_code=400)
 
-    user = User.query.filter_by(google_id=google_id).first()
-    if not user:
-        user = User(username=username, email=email, google_id=google_id)
-        db.session.add(user)
-        db.session.commit()
+        # 이메일로 기존 유저 찾기
+        user = User.query.filter_by(email=email).first()
 
-    login_user(user)
-    return jsonify({
-        "message": "구글 로그인 성공",
-        "user_id": user.id,
-        "username": user.username
-    }), 200
+        if not user:
+            # [수정] 닉네임 중복 방지 로직
+            # DB에 동일한 username이 있는지 확인
+            existing_username = User.query.filter_by(username=username).first()
+            if existing_username:
+                # 중복된다면 이름 뒤에 랜덤한 값이나 이메일 앞부분을 붙여 고유하게 만듦
+                username = f"{username}_{str(uuid.uuid4())[:4]}"
 
+            user = User(
+                username=username,
+                email=email,
+                profile_pic=profile_pic
+            )
+            db.session.add(user)
+            db.session.commit()
+            message = "회원가입 및 로그인 성공"
+        else:
+            # 정보 업데이트
+            user.username = username
+            user.profile_pic = profile_pic
+            db.session.commit()
+            message = "로그인 성공"
+
+        login_user(user)
+
+        return api_response(
+            success=True,
+            data={
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "profile_pic": user.profile_pic
+            },
+            message=message
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"로그인 처리 중 에러: {str(e)}")
+        return api_response(success=False, message="서버 오류", status_code=500)
 
 # --- 2. 테스트용 유저 생성 API ---
 @auth_blueprint.route('/test_create')
@@ -112,40 +133,8 @@ def test_create():
 @auth_blueprint.route('/logout')
 @login_required
 def logout():
-    """
-    현재 사용자 로그아웃
-    ---
-    tags:
-      - Auth
-    description: 현재 로그인된 세션을 종료합니다.
-    responses:
-      200:
-        description: 로그아웃 성공 메시지
-    """
+    """ 현재 사용자 로그아웃 """
     logout_user()
-    return jsonify({"message": "로그아웃 되었습니다."}), 200
+    return api_response(success=True, message="로그아웃 되었습니다.")
 
 
-# --- 4. 내 정보 확인 API ---
-@auth_blueprint.route('/me')
-def get_me():
-    """
-    현재 로그인된 정보 확인
-    ---
-    tags:
-      - Auth
-    description: 세션 정보를 바탕으로 현재 로그인된 유저의 정보를 반환합니다.
-    responses:
-      200:
-        description: 로그인 여부 및 유저 데이터
-    """
-    if current_user.is_authenticated:
-        return jsonify({
-            "logged_in": True,
-            "user": {
-                "id": current_user.id,
-                "username": current_user.username,
-                "email": current_user.email
-            }
-        })
-    return jsonify({"logged_in": False}), 200

@@ -15,8 +15,17 @@ class User(UserMixin, db.Model):
     # (선택 추가) 유저가 가진 결과들을 바로 참조하고 싶을 때
     results = db.relationship('TypingResult', backref='user', lazy=True)
 
-# 구글에서 제공하는 고유 식별자 (Sub 값)
-    google_id = db.Column(db.String(200), unique=True, nullable=True)
+    # 총 플레이 횟수
+    play_count = db.Column(db.Integer, default=0, nullable=False) 
+
+    # Max 콤보 값
+    max_combo = db.Column(db.Integer, default=0, nullable=False)
+
+    # 평균 정확도
+    avg_accuracy = db.Column(db.Float, default = 0.0, nullable = False)
+
+# # 구글에서 제공하는 고유 식별자 (Sub 값)
+#     google_id = db.Column(db.String(200), unique=True, nullable=True)
     # 유저 프로필 이미지 URL (선택사항)
     profile_pic = db.Column(db.String(200))
 
@@ -51,7 +60,7 @@ class TypingResult(db.Model):
     cpm = db.Column(db.Integer, nullable=False)
     wpm = db.Column(db.Integer, nullable=False)
     accuracy = db.Column(db.Float, nullable=False)
-    
+    combo = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # (선택 추가) 결과에서 텍스트 정보를 바로 가져오기 위한 관계 설정
