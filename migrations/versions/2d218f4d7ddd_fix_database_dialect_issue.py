@@ -1,8 +1,8 @@
-"""complete initial
+"""fix database dialect issue
 
-Revision ID: d88c8e20f00e
+Revision ID: 2d218f4d7ddd
 Revises: 
-Create Date: 2026-01-01 15:34:36.623777
+Create Date: 2026-01-04 12:44:52.118459
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'd88c8e20f00e'
+revision = '2d218f4d7ddd'
 down_revision = None
 branch_labels = None
 depends_on = None

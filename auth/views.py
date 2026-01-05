@@ -1,53 +1,47 @@
+import os
 from flask import Blueprint, request, redirect, url_for, jsonify , current_app
 from models import User, db
 from flask_login import login_user, logout_user, login_required, current_user
 from utils import api_response
 import uuid
+from google.oauth2 import id_token
+from google.auth.transport import requests
+
 
 auth_blueprint = Blueprint('auth', __name__)
-
+INTERNAL_SYNC_KEY = os.getenv("INTERNAL_SYNC_KEY")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 # --- 1. 구글 로그인 처리 API ---
 @auth_blueprint.route('/google', methods=['POST'])
 def google_login():
-    """
-    구글 소셜 로그인/회원가입 API (이메일 기준)
-    ---
-    tags:
-      - Auth
-    description: |
-      **요청 URL:** `POST /auth/google`
-      - 프론트엔드가 보낸 이메일을 기준으로 신규 유저는 가입, 기존 유저는 로그인을 처리합니다.
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          properties:
-            email: {type: string, example: "user@gmail.com"}
-            username: {type: string, example: "홍길동"}
-            profile_pic: {type: string, example: "https://photo.url/..."}
-    responses:
-      200:
-        description: 성공 (user_id 반환)
-    """
     try:
-        data = request.get_json()
-        email = data.get('email')
-        username = data.get('username', 'User') # 이름이 없을 경우 기본값
-        profile_pic = data.get('profile_pic')
+        # 1. 보안 키 검증 (X-INTERNAL-KEY)
+        internal_key = request.headers.get('X-INTERNAL-KEY')
+        if internal_key != INTERNAL_SYNC_KEY:
+            return api_response(success=False, message="접근 권한이 없습니다.", status_code=403)
 
-        if not email:
-            return api_response(success=False, message="이메일 정보가 누락되었습니다.", status_code=400)
+        # 2. 헤더에서 구글 ID 토큰 추출
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return api_response(success=False, message="인증 토큰이 없습니다.", status_code=401)
+        
+        token = auth_header.split(" ")[1]
 
-        # 이메일로 기존 유저 찾기
+        # 3. 구글 토큰 검증 및 정보 추출
+        # id_token.verify_oauth2_token이 서명, 만료시간 등을 다 체크해줍니다.
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
+        
+        email = idinfo['email']
+        username = idinfo.get('name', 'User')
+        profile_pic = idinfo.get('picture')
+
+        # 4. DB 로직 (기존과 동일)
         user = User.query.filter_by(email=email).first()
 
         if not user:
-            # [수정] 닉네임 중복 방지 로직
-            # DB에 동일한 username이 있는지 확인
+            # 닉네임 중복 방지
             existing_username = User.query.filter_by(username=username).first()
             if existing_username:
-                # 중복된다면 이름 뒤에 랜덤한 값이나 이메일 앞부분을 붙여 고유하게 만듦
                 username = f"{username}_{str(uuid.uuid4())[:4]}"
 
             user = User(
@@ -59,14 +53,12 @@ def google_login():
             db.session.commit()
             message = "회원가입 및 로그인 성공"
         else:
-            # 정보 업데이트
-            user.username = username
+            # 기존 유저 정보 업데이트
             user.profile_pic = profile_pic
             db.session.commit()
             message = "로그인 성공"
 
-        login_user(user)
-
+        # 5. 성공 응답 (프론트엔드 NextAuth가 기대하는 user_id 포함)
         return api_response(
             success=True,
             data={
@@ -78,10 +70,13 @@ def google_login():
             message=message
         )
 
+    except ValueError:
+        # 토큰이 가짜거나 만료되었을 때 발생하는 에러
+        return api_response(success=False, message="유효하지 않은 구글 토큰입니다.", status_code=401)
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"로그인 처리 중 에러: {str(e)}")
-        return api_response(success=False, message="서버 오류", status_code=500)
+        current_app.logger.error(f"로그인 에러: {str(e)}")
+        return api_response(success=False, message="서버 오류 발생", status_code=500)
 
 # --- 2. 테스트용 유저 생성 API ---
 @auth_blueprint.route('/test_create')

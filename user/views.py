@@ -113,11 +113,8 @@ def get_recent_history(user_id):
         description: 최근 기록 리스트 반환
     """
     try:
-        # 1. 쿼리 스트링에서 limit 값을 가져옴 (기본값 5)
         limit_val = request.args.get('limit', default=5, type=int)
 
-        # 2. DB 조회 시 limit_val 적용
-        # 삭제된 글을 제외하고 싶다면 여기서 .join(TypingText)를 추가해도 됩니다.
         results = TypingResult.query.filter_by(user_id=user_id)\
                   .order_by(TypingResult.created_at.desc())\
                   .limit(limit_val).all()
@@ -160,7 +157,7 @@ def get_history_by_genre(user_id):
         in: query
         type: string
         required: true
-        description: 필터링할 장르명 (예: k-pop, proverb 등)
+        description: "필터링할 장르명 (예: k-pop, proverb 등)"
     responses:
       200:
         description: 해당 장르의 기록 리스트 반환

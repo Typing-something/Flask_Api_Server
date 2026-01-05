@@ -32,3 +32,5 @@ instance/
 # --- 운영체제 임시 파일 ---
 .DS_Store
 Thumbs.db
+
+collect_text.py

@@ -54,7 +54,7 @@ def add_text():
         in: formData
         type: file
         description: 글과 매칭될 대표 이미지 (S3 업로드)
-         responses:
+    responses:
       302:
         description: 저장 후 메인 리다이렉트
       200:
@@ -66,14 +66,21 @@ def add_text():
         author = request.form.get('author')
         content = request.form.get('content')
         
-        # 1. 이미지 파일 처리
         image_file = request.files.get('image')
         image_url = None
 
+        # 1. 이미지 파일 처리 로직 강화
         if image_file and image_file.filename != '':
-            # 파일명 난수화 (UUID)
-            ext = image_file.filename.rsplit('.', 1)[1].lower()
-            filename = f"texts/{uuid.uuid4()}.{ext}"
+            # [수정] os.path.splitext를 사용하여 확장자를 안전하게 추출
+            # rsplit('.', 1) 방식은 점(.)이 없는 파일에서 IndexError를 유발함
+            _, ext = os.path.splitext(image_file.filename)
+            ext = ext.lower() # .jpg, .png 등
+
+            # [추가] 허용된 확장자인지 체크하는 로직 (보안 강화)
+            if ext not in ['.jpg', '.jpeg', '.png', '.gif']:
+                return api_response(success=False, message="지원하지 않는 파일 형식입니다.", status_code=400)
+
+            filename = f"texts/{uuid.uuid4()}{ext}" # texts/uuid.jpg 형태
             
             try:
                 # 2. S3 업로드 실행
@@ -86,28 +93,36 @@ def add_text():
                         "ACL": "public-read"
                     }
                 )
-                # 3. S3 URL 생성
-                image_url = f"https://{BUCKET_NAME}.s3.{os.environ.get('AWS_REGION', 'ap-northeast-2')}.amazonaws.com/{filename}"
-            except Exception as e:
-                current_app.logger.error(f"S3 업로드 에러 발생: {str(e)}") 
-                return api_response(success=False, message="이미지 업로드에 실패하여 글을 저장하지 못했습니다.", status_code=500)
+                # 3. S3 URL 생성 (f-string 가독성 개선)
+                region = os.environ.get('AWS_REGION', 'ap-northeast-2')
+                image_url = f"https://{BUCKET_NAME}.s3.{region}.amazonaws.com/{filename}"
 
-        # 4. DB 저장
-        new_entry = TypingText(
-            genre=genre, 
-            title=title, 
-            author=author, 
-            content=content,
-            image_url=image_url
-        )
-        db.session.add(new_entry)
-        db.session.commit()
-        return api_response(
-            success=True, 
-            message="글이 성공적으로 등록되었습니다.", 
-            data={"id": new_entry.id, "image_url": image_url},
-            status_code=201
-        )
+            except Exception as e:
+                current_app.logger.error(f"S3 업로드 에러: {str(e)}") 
+                return api_response(success=False, message="이미지 저장 중 오류가 발생했습니다.", status_code=500)
+
+        # 4. DB 저장 (기존 로직 동일)
+        try:
+            new_entry = TypingText(
+                genre=genre, 
+                title=title, 
+                author=author, 
+                content=content,
+                image_url=image_url
+            )
+            db.session.add(new_entry)
+            db.session.commit()
+            
+            return api_response(
+                success=True, 
+                message="성공적으로 등록되었습니다.", 
+                data={"id": new_entry.id, "image_url": image_url},
+                status_code=201
+            )
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"DB 저장 에러: {str(e)}")
+            return api_response(success=False, message="데이터베이스 저장 실패", status_code=500)
     
     return render_template('add_text.html')
 
@@ -334,7 +349,7 @@ def save_typing_result():
     """
     try:
         data = request.get_json()
-        
+        is_new_record = False
         # 1. 필수 데이터 검증
         if not data:
             return api_response(success=False, error_code=400, message="전송된 데이터가 없습니다.", status_code=400)
