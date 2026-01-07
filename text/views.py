@@ -6,7 +6,7 @@ from database import db
 from models import TypingText, TypingResult, User
 from datetime import datetime
 from utils import api_response
-
+from sqlalchemy import func
 
 # S3 클라이언트 설정 (환경변수 로드)
 s3 = boto3.client('s3',
@@ -77,7 +77,7 @@ def add_text():
             ext = ext.lower() # .jpg, .png 등
 
             # [추가] 허용된 확장자인지 체크하는 로직 (보안 강화)
-            if ext not in ['.jpg', '.jpeg', '.png', '.gif']:
+            if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
                 return api_response(success=False, message="지원하지 않는 파일 형식입니다.", status_code=400)
 
             filename = f"texts/{uuid.uuid4()}{ext}" # texts/uuid.jpg 형태
@@ -113,6 +113,8 @@ def add_text():
             db.session.add(new_entry)
             db.session.commit()
             
+            current_app.logger.info(f"✅ [{title}] 등록 성공")
+
             return api_response(
                 success=True, 
                 message="성공적으로 등록되었습니다.", 
@@ -127,48 +129,66 @@ def add_text():
     return render_template('add_text.html')
 
 
-# 1. 메인용: 상위 10개 조회
+# 1. 메인용: 랜덤 10개 조회
 @text_blueprint.route('/main', methods=['GET'])
 def get_main_texts():
     """
-    메인 페이지용 최신 텍스트 10개 조회
+    메인 페이지용 랜덤 텍스트 10개 조회
     ---
     tags:
       - Text
     description: |
       **요청 URL:** `GET /text/main`
-      - 메인 화면에 뿌려줄 요약된 글 목록을 가져옵니다. (이미지 URL 포함)
+      - DB에 등록된 전체 텍스트 중 무작위로 10개를 선정하여 반환합니다.
+      - 사용자가 페이지를 새로고침할 때마다 새로운 연습 콘텐츠를 추천하는 용도로 사용됩니다.
     responses:
       200:
-        description: 본문 요약 및 이미지 URL이 포함된 리스트 반환
+        description: 랜덤하게 선택된 10개의 글 리스트 반환
+        schema:
+          type: object
+          properties:
+            success: {type: boolean, example: true}
+            message: {type: string, example: "랜덤 글 10개를 성공적으로 가져왔습니다."}
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: {type: integer}
+                  genre: {type: string}
+                  title: {type: string}
+                  author: {type: string}
+                  content: {type: string}
+                  image_url: {type: string}
     """
     try:
-      
-        texts = TypingText.query.order_by(TypingText.id.desc()).limit(10).all()
+        # [핵심 수정] func.rand()를 사용하여 무작위 정렬 후 10개 추출
+        texts = TypingText.query.order_by(func.rand()).limit(10).all()
+        
         texts_list = [{
             "id": t.id,
             "genre": t.genre,
             "title": t.title,
             "author": t.author,
-            "content": t.content[:50] + "...",
+            "content": t.content,
             "image_url": t.image_url
         } for t in texts]
+
+        current_app.logger.info(f" [랜덤조회] 메인 화면용 텍스트 {len(texts_list)}개를 무작위로 추출했습니다.")
 
         return api_response(
             success=True, 
             data=texts_list, 
-            message="최신 글 10개를 성공적으로 가져왔습니다."
+            message="랜덤 글 10개를 성공적으로 가져왔습니다."
         )
 
     except Exception as e:
-
-        current_app.logger.error(f"메인 텍스트 조회 중 에러 발생: {str(e)}")
-        
+        current_app.logger.error(f"❌ 메인 텍스트 랜덤 조회 중 에러: {str(e)}")
         return api_response(
             success=False, 
-            data=[],  # 실패했으므로 빈 리스트 전달
+            data=[], 
             error_code=500, 
-            message="서버 내부 문제로 글 목록을 불러오지 못했습니다.",
+            message="글 목록을 불러오는 중 서버 오류가 발생했습니다.",
             status_code=500
         )
 
@@ -232,25 +252,67 @@ def get_texts_by_genre():
 @text_blueprint.route('/<int:text_id>', methods=['GET'])
 def get_text_by_id(text_id):
     """
-    글 상세 정보 및 내 최고 기록 조회
+    글 상세 정보 및 유저별 개인 최고 기록 조회
     ---
     tags:
       - Text
     description: |
-      **요청 URL 예시:** `GET /text/1?user_id=5`
-      - 특정 글의 본문 전체와 이미지 URL, 해당 유저의 최고 기록을 함께 가져옵니다.
+      **요청 URL:** `GET /text/{text_id}?user_id={user_id}`
+      
+      **기능:**
+      1. 특정 글의 제목, 작가, 본문 전체, 이미지 URL을 가져옵니다.
+      2. `user_id`가 쿼리 파라미터로 전달되면, 해당 글에 대한 유저의 역대 최고 CPM 기록을 함께 반환합니다.
+      3. 기록이 없는 유저이거나 `user_id`를 보내지 않은 경우 `my_best`는 `null`로 반환됩니다.
     parameters:
       - name: text_id
         in: path
         type: integer
         required: true
+        description: 조회할 글의 고유 ID
       - name: user_id
         in: query
         type: integer
-        description: 내 최고기록을 조회하고 싶을 때 포함
+        required: false
+        description: 현재 사용자의 최고 기록을 함께 보고 싶을 때 전달
     responses:
       200:
-        description: 글 상세 정보(이미지 포함)와 기록 데이터
+        description: 데이터 조회 성공
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "글 상세 정보와 최고 기록을 성공적으로 가져왔습니다."
+            data:
+              type: object
+              properties:
+                text_info:
+                  type: object
+                  description: 글 상세 정보
+                  properties:
+                    id: {type: integer, example: 1}
+                    genre: {type: string, example: "poem"}
+                    title: {type: string, example: "진달래꽃"}
+                    author: {type: string, example: "김소월"}
+                    content: {type: string, example: "나 보기가 역겨워 가실 때에는..."}
+                    image_url: {type: string, example: "https://s3.ap-northeast-2.../image.jpg"}
+                my_best:
+                  type: object
+                  nullable: true
+                  description: 해당 유저의 이 글에 대한 최고 기록 (기록 없으면 null)
+                  properties:
+                    cpm: {type: integer, example: 450}
+                    wpm: {type: integer, example: 85}
+                    accuracy: {type: number, example: 98.5}
+                    combo: {type: integer}
+                    date: {type: string, example: "2026-01-05"}
+      404:
+        description: 존재하지 않는 text_id 요청 시
+      500:
+        description: 서버 내부 오류
     """
     try:
         # 1. 글 정보 조회 (get_or_404 대신 직접 조회하여 커스텀 에러 처리)
@@ -280,6 +342,7 @@ def get_text_by_id(text_id):
                     "cpm": best.cpm, 
                     "wpm": best.wpm, 
                     "accuracy": best.accuracy, 
+                    "combo": best.combo,
                     "date": best.created_at.strftime('%Y-%m-%d')
                 }
 
@@ -295,6 +358,8 @@ def get_text_by_id(text_id):
             }, 
             "my_best": best_record # 기록이 없으면 None으로 나감
         }
+
+        current_app.logger.info(f"🔍 [상세조회] 유저 {u_id if u_id else '비회원'} - '{t.title}' 조회 완료")
 
         return api_response(
             success=True, 
@@ -316,36 +381,86 @@ def get_text_by_id(text_id):
 @text_blueprint.route('/results', methods=['POST'])
 def save_typing_result():
     """
-    타자 연습 결과 기록 저장
+    타자 연습 결과 기록 저장 및 유저 통계 갱신
     ---
     tags:
       - Result
     description: |
       **요청 URL:** `POST /text/results`
-      **JSON 데이터 형식:**
-      ```json
-      {
-        "text_id": 1,
-        "user_id": 5,
-        "cpm": 450,
-        "wpm": 75,
-        "accuracy": 98.5
-      }
-      ```
+      
+      **기능:**
+      1. 새로운 타자 연습 결과를 `typing_result` 테이블에 저장합니다.
+      2. 해당 유저의 전체 플레이 횟수(`play_count`)를 1 증가시킵니다.
+      3. 유저의 전체 평균 정확도(`avg_accuracy`)를 실시간으로 재계산합니다.
+      4. 이번 판의 콤보가 기존 최고 콤보보다 높으면 `max_combo`를 갱신합니다.
     parameters:
       - name: body
         in: body
         required: true
         schema:
+          type: object
+          required:
+            - text_id
+            - user_id
+            - cpm
+            - accuracy
+            - combo
           properties:
-            text_id: {type: integer}
-            user_id: {type: integer}
-            cpm: {type: integer}
-            wpm: {type: integer}
-            accuracy: {type: number}
+            text_id:
+              type: integer
+              description: 연습한 글의 ID
+            user_id:
+              type: integer
+              description: 현재 로그인한 유저의 ID
+            cpm:
+              type: integer
+              description: 분당 타자수 (Characters Per Minute)
+            wpm:
+              type: integer
+              description: 분당 단어수 (Words Per Minute), 미입력 시 0
+            accuracy:
+              type: number
+              format: float
+              description: 이번 판의 정확도 (0~100)
+            combo:
+              type: integer
+              description: 이번 판에서 달성한 최대 연속 콤보
     responses:
       201:
-        description: 저장 완료
+        description: 저장 및 통계 업데이트 완료
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "연습 결과가 저장되었고 유저 통계가 갱신되었습니다."
+            data:
+              type: object
+              properties:
+                result_id:
+                  type: integer
+                  description: 새로 생성된 결과 기록의 PK
+                play_count:
+                  type: integer
+                  description: 누적 플레이 횟수
+                avg_accuracy:
+                  type: number
+                  description: 갱신된 전체 평균 정확도
+                max_combo:
+                  type: integer
+                  description: 유저의 역대 최고 콤보
+                is_new_record:
+                  type: boolean
+                  description: 이번 판에서 최고 콤보 신기록을 달성했는지 여부
+      400:
+        description: 필수 파라미터 누락 또는 데이터 형식 오류
+      404:
+        description: 존재하지 않는 유저 ID
+      500:
+        description: 서버 내부 오류 (DB 트랜잭션 실패 등)
     """
     try:
         data = request.get_json()
@@ -406,6 +521,8 @@ def save_typing_result():
 
         # 4. 최종 DB 반영 (결과 저장 + 유저 통계 갱신을 한 번에)
         db.session.commit()
+
+        current_app.logger.error(f"상세 조회 중 서버 에러: {str(e)}")
 
         return api_response(
             success=True, 
@@ -495,79 +612,91 @@ def get_user_history(user_id):
         )
 
 
-# 6. 글별 글로벌 최고 점수
+
+# 6. 글별 최고 점수
 @text_blueprint.route('/results/best', methods=['GET'])
 def get_global_best_score():
     """
-    이 글의 전 세계 1등 기록 조회 (명예의 전당)
+    해당 글의 최고 기록 조회
     ---
     tags:
       - Result
     description: |
-      **요청 URL 예시:** `GET /text/results/best?text_id=1`
-      - 특정 글에서 가장 높은 타수(CPM)를 기록한 유저 정보를 가져옵니다.
+      **요청 URL:** `GET /text/results/best?text_id=1`
+      - 특정 글에서 가장 높은 타수(CPM)를 기록한 유저의 정보와 성적을 가져옵니다.
+      - 랭킹 1위 유저의 닉네임, 타수, 정확도, 최대 콤보를 포함합니다.
     parameters:
       - name: text_id
         in: query
         type: integer
         required: true
+        description: 1등 기록을 조회할 글의 ID
     responses:
       200:
-        description: 1등 유저명과 점수 정보
+        description: 전 세계 1등 기록 조회 성공
+        schema:
+          type: object
+          properties:
+            success: {type: boolean, example: true}
+            message: {type: string}
+            data:
+              type: object
+              properties:
+                top_player: {type: string, description: "1등 유저 닉네임", example: "타자마스터"}
+                profile_pic: {type: string, description: "1등 유저 프로필 사진 URL"}
+                best_cpm: {type: integer, description: "최고 타수", example: 850}
+                best_wpm: {type: integer, description: "최고 WPM", example: 120}
+                best_accuracy: {type: number, description: "최고 정확도 (%)", example: 99.8}
+                best_combo: {type: integer, description: "최고 콤보", example: 342}
+                date: {type: string, description: "달성 일자", example: "2026-01-07"}
+      400:
+        description: text_id 파라미터 누락
+      500:
+        description: 서버 내부 오류
     """
     try:
-        # 1. 쿼리 파라미터에서 text_id 가져오기
         t_id = request.args.get('text_id')
         if not t_id:
-            return api_response(
-                success=False, 
-                error_code=400, 
-                message="text_id가 필요합니다.", 
-                status_code=400
-            )
+            return api_response(success=False, error_code=400, message="text_id가 필요합니다.", status_code=400)
 
-        # 2. DB 조회: Result와 User 테이블을 조인하여 1등 기록과 유저 이름을 한꺼번에 가져옴
-        best = db.session.query(TypingResult, User.username)\
+        # [수정] User.username 뿐만 아니라 profile_pic도 함께 가져오도록 쿼리 보강
+        # TypingResult와 User 테이블을 Join하여 CPM 기준 내림차순 정렬 후 최상위 1건 추출
+        best = db.session.query(TypingResult, User.username, User.profile_pic)\
                 .join(User, TypingResult.user_id == User.id)\
                 .filter(TypingResult.text_id == t_id)\
                 .order_by(TypingResult.cpm.desc()).first()
         
-        # 3. 기록이 아예 없는 경우
         if not best:
             return api_response(
                 success=True, 
                 data={
                     "top_player": "No record", 
+                    "profile_pic": None,
                     "best_cpm": 0, 
                     "best_wpm": 0, 
-                    "best_accuracy": 0
+                    "best_accuracy": 0,
+                    "best_combo": 0
                 }, 
                 message="아직 등록된 기록이 없습니다."
             )
 
-        # 4. 데이터 언팩 (쿼리 결과에서 객체와 유저명 분리)
-        res, uname = best
+        # 데이터 언팩 (쿼리 결과에서 객체와 유저 정보 분리)
+        res, uname, upic = best
         data = {
             "top_player": uname, 
+            "profile_pic": upic,
             "best_cpm": res.cpm,
             "best_wpm": res.wpm, 
             "best_accuracy": res.accuracy,
+            "best_combo": res.combo, # [추가] 콤보 정보 반영
             "date": res.created_at.strftime('%Y-%m-%d')
         }
 
-        # 5. 성공 응답
-        return api_response(
-            success=True, 
-            data=data, 
-            message="전 세계 1등 기록을 성공적으로 가져왔습니다."
-        )
+        # [한글 로그 추가]
+        current_app.logger.info(f"👑 [명예의전당] 글 ID:{t_id}의 1등 '{uname}' ({res.cpm}타) 정보를 조회했습니다.")
+
+        return api_response(success=True, data=data, message="전 세계 1등 기록을 성공적으로 가져왔습니다.")
 
     except Exception as e:
-        # 조인 쿼리 등에서 발생할 수 있는 오류 로그 기록
-        current_app.logger.error(f"전 세계 1등 조회 중 에러: {str(e)}")
-        return api_response(
-            success=False, 
-            error_code=500, 
-            message="서버 오류로 최고 기록을 불러오지 못했습니다.", 
-            status_code=500
-        )
+        current_app.logger.error(f"❌ 명예의 전당 조회 오류: {str(e)}")
+        return api_response(success=False, error_code=500, message="서버 오류 발생", status_code=500)

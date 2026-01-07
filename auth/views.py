@@ -14,6 +14,53 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 # --- 1. 구글 로그인 처리 API ---
 @auth_blueprint.route('/google', methods=['POST'])
 def google_login():
+    """
+    구글 소셜 로그인 및 회원가입
+    ---
+    tags:
+      - Auth
+    description: |
+      **기능:**
+      1. 프론트엔드에서 전달받은 구글 ID 토큰을 검증합니다.
+      2. 내부 서버 통신용 보안키(X-INTERNAL-KEY)를 확인합니다.
+      3. 가입되지 않은 이메일이면 자동으로 회원가입을 진행합니다.
+      4. 가입된 유저라면 프로필 사진 등 최신 정보를 업데이트하고 로그인 처리합니다.
+      
+      **주의사항:** - 헤더에 `Authorization: Bearer <Google_ID_Token>` 형식을 지켜야 합니다.
+      - 내부 호출용 `X-INTERNAL-KEY`가 필수입니다.
+    parameters:
+      - name: X-INTERNAL-KEY
+        in: header
+        type: string
+        required: true
+        description: 내부 서버 동기화용 보안키
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: "Bearer {Google_ID_Token}"
+    responses:
+      200:
+        description: 로그인 성공
+        schema:
+          type: object
+          properties:
+            success: {type: boolean, example: true}
+            message: {type: string, example: "로그인 성공"}
+            data:
+              type: object
+              properties:
+                user_id: {type: integer, description: "DB 내 유저 고유 ID"}
+                username: {type: string, description: "유저 닉네임"}
+                email: {type: string, description: "구글 이메일"}
+                profile_pic: {type: string, description: "구글 프로필 이미지 URL"}
+      401:
+        description: 구글 토큰이 유효하지 않거나 만료됨
+      403:
+        description: X-INTERNAL-KEY가 일치하지 않음
+      500:
+        description: DB 저장 실패 등 서버 내부 오류
+    """
     try:
         # 1. 보안 키 검증 (X-INTERNAL-KEY)
         internal_key = request.headers.get('X-INTERNAL-KEY')
@@ -57,6 +104,8 @@ def google_login():
             user.profile_pic = profile_pic
             db.session.commit()
             message = "로그인 성공"
+
+        current_app.logger.info(f"✅ [{message}] {user.username} ({user.email}) 님이 접속했습니다.")
 
         # 5. 성공 응답 (프론트엔드 NextAuth가 기대하는 user_id 포함)
         return api_response(

@@ -110,6 +110,20 @@ def crash():
     app.logger.info("!!! 사용자가 /crash를 호출함: 서버를 강제 종료합니다 !!!")
     os._exit(1)
 
+with app.app_context():
+    app.logger.info("="*50)
+    app.logger.info(f"🚀 타이핑 게임 서버 시작 (모드: {ENV.upper()})")
+    app.logger.info(f"🌐 접속 URL: {SERVER_URL}")
+    
+    try:
+        # DB 연결 테스트 쿼리 실행
+        db.session.execute('SELECT 1')
+        app.logger.info(f"✅ DB 연결 성공: {app.config['SQLALCHEMY_DATABASE_URI'].split('@')[-1]}") # 보안상 주소 뒷부분만 출력
+    except Exception as e:
+        app.logger.error(f"❌ DB 연결 실패! 설정을 확인하세요: {str(e)}")
+    
+    app.logger.info("="*50)
+    
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     if ENV == 'production':
