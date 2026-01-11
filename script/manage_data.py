@@ -7,8 +7,8 @@ import os
 sys.path.append(os.getcwd())
 
 from app import app
-from database import db
-from models import TypingText
+from app.database import db
+from app.models import TypingText
 
 def seed_texts():
     """초기 샘플 데이터를 DB에 삽입하는 함수"""

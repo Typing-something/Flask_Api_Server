@@ -1,0 +1,66 @@
+summary: "유저 프로필 및 상세 통계 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 특정 유저(`user_id`)의 계정 정보(닉네임, 이메일, 프로필 사진 등)를 조회합니다.
+  2. 해당 유저가 지금까지 쌓은 모든 타자 연습 통계(CPM, WPM, 최고/평균 지표)를 한눈에 확인할 수 있습니다.
+
+  **요청 URL 예시:**
+  - `GET /user/profile/10`
+
+  **반환 데이터(Response Data) 의미:**
+  - `account`: **계정 정보** => 유저의 기본 신상 정보가 담긴 객체입니다.
+    - `user_id`: **유저 고유 번호** => DB에 등록된 유저의 식별 ID입니다.
+    - `username`: **닉네임** => 서비스에서 사용하는 유저의 이름입니다.
+    - `email`: **이메일** => 가입 시 사용한 이메일 주소입니다.
+    - `profile_pic`: **프로필 사진** => S3 또는 소셜 로그인에서 가져온 이미지 URL입니다.
+    - `ranking_score`: **랭킹 점수** => 유저의 실력을 환산한 종합 점수입니다.
+  - `stats`: **상세 통계** => 유저의 실력을 나타내는 수치 데이터 객체입니다.
+    - `play_count`: **총 플레이 횟수** => 지금까지 완료한 전체 연습 횟수입니다.
+    - `max_combo`: **역대 최고 콤보** => 연습 중 끊기지 않고 이어간 최대 타수입니다.
+    - `avg_accuracy`: **전체 평균 정확도** => 모든 연습의 평균 정확도(%)입니다.
+    - `best_cpm / avg_cpm`: **최고/평균 CPM** => 분당 타자수 지표입니다.
+    - `best_wpm / avg_wpm`: **최고/평균 WPM** => 분당 단어수 지표입니다.
+
+parameters:
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "정보를 조회할 유저의 고유 ID"
+
+responses:
+  200:
+    description: "유저 프로필 정보 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "프로필 및 모든 통계 정보를 성공적으로 가져왔습니다."}
+        data:
+          type: object
+          properties:
+            account:
+              type: object
+              properties:
+                user_id: {type: integer, example: 10}
+                username: {type: string, example: "타자장인"}
+                email: {type: string, example: "master@example.com"}
+                profile_pic: {type: string, example: "https://example.com/pic.jpg"}
+                ranking_score: {type: integer, example: 1250}
+            stats:
+              type: object
+              properties:
+                play_count: {type: integer, example: 42}
+                max_combo: {type: integer, example: 256}
+                avg_accuracy: {type: number, example: 97.5}
+                best_cpm: {type: integer, example: 650}
+                avg_cpm: {type: number, example: 520.4}
+                best_wpm: {type: integer, example: 110}
+                avg_wpm: {type: number, example: 88.2}
+  404:
+    description: "존재하지 않는 유저 ID"
+  500:
+    description: "서버 내부 오류"

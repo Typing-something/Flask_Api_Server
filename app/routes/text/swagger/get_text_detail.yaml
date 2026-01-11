@@ -1,0 +1,75 @@
+summary: "글 상세 정보 및 유저 최고 기록 조회"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  1. 특정 글(`text_id`)의 상세 정보(제목, 작가, 본문, 이미지 등)를 조회합니다.
+  2. `user_id`를 함께 전달할 경우, 다음 두 가지 추가 정보를 제공합니다.
+     - **개인 최고 기록**: 해당 유저가 이 글에서 세운 역대 최고 기록(CPM 기준 1위)
+     - **찜 상태**: 해당 유저가 이 글을 찜 목록에 추가했는지 여부 (`is_favorite`)
+
+  **요청 URL 예시:**
+  - 비로그인/기록 제외 조회: `GET /text/1`
+  - 로그인 유저 정보 포함 조회: `GET /text/1?user_id=10`
+
+  **반환 데이터(Response Data) 의미:**
+  - `text_info`: **글 상세 데이터** => 글의 제목, 작가, 본문 등 원본 데이터 뭉치입니다.
+  - `is_favorite`: **찜 여부** => 유저가 해당 글을 찜했는지 여부(true/false)입니다. (유저 ID 미전달 시 false)
+  - `my_best`: **나의 최고 기록** => 해당 유저의 최고 타수 기록입니다. (기록이 없거나 비로그인 시 null)
+  - `cpm / wpm / accuracy`: **연습 지표** => 최고 기록 당시의 타수, 단어수, 정확도 수치입니다.
+  - `date`: **기록 달성일** => 최고 기록을 세운 날짜입니다.
+
+parameters:
+  - name: text_id
+    in: path
+    type: integer
+    required: true
+    description: "조회할 글의 고유 ID"
+  
+  - name: user_id
+    in: query
+    type: integer
+    required: false
+    description: "개인 최고 기록 및 찜 여부를 확인하려는 유저의 ID"
+
+responses:
+  200:
+    description: "성공적으로 상세 정보를 반환함"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "글 상세 정보와 최고 기록을 성공적으로 가져왔습니다."
+        data:
+          type: object
+          properties:
+            text_info:
+              type: object
+              description: "글의 상세 데이터"
+              properties:
+                id: {type: integer, example: 1}
+                genre: {type: string, example: "poem"}
+                title: {type: string, example: "진달래꽃"}
+                author: {type: string, example: "김소월"}
+                content: {type: string, example: "나 보기가 역겨워 가실 때에는..."}
+                image_url: {type: string, example: "https://s3.amazonaws.com/image.jpg"}
+                is_favorite: {type: boolean, example: true, description: "유저의 찜 여부"}
+            my_best:
+              type: object
+              nullable: true
+              description: "유저의 최고 기록 (기록이 없거나 비로그인 시 null)"
+              properties:
+                cpm: {type: integer, example: 450}
+                wpm: {type: integer, example: 85}
+                accuracy: {type: number, example: 98.5}
+                combo: {type: integer, example: 120}
+                date: {type: string, example: "2026-01-05"}
+  404:
+    description: "존재하지 않는 글 ID 요청 시"
+  500:
+    description: "서버 내부 로직 에러"

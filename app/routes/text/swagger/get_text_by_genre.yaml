@@ -1,0 +1,68 @@
+
+summary: "장르별 목록 필터링 조회"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  1. DB에 등록된 전체 텍스트 목록을 가져오거나, 특정 장르만 필터링하여 조회합니다.
+  2. 장르(`genre`)를 지정하지 않으면 전체 목록을 반환합니다.
+  3. 유저 ID(`user_id`)를 함께 전달하면 각 글에 대한 해당 유저의 **찜 여부**를 함께 확인할 수 있습니다.
+
+  **요청 URL 예시:**
+  - 전체 목록 조회: `GET /text/`
+  - 특정 장르 필터링 (예: K-POP): `GET /text/?genre=k-pop`
+  - 로그인 유저 찜 상태 포함 조회: `GET /text/?genre=novel&user_id=10`
+
+  **반환 데이터(Response Data) 의미:**
+  - `id`: **글 고유 번호** => 텍스트 데이터의 고유 DB ID입니다.
+  - `genre`: **장르** => 글의 카테고리(k-pop, novel, poem 등)입니다.
+  - `title`: **글 제목** => 연습할 텍스트의 제목입니다.
+  - `author`: **작가/아티스트** => 원작자 또는 가수 이름입니다.
+  - `content`: **본문 내용** => 실제 타자 연습에 사용되는 텍스트 본문입니다.
+  - `image_url`: **이미지 주소** => S3에 저장된 관련 이미지의 URL입니다.
+
+parameters:
+  - name: genre
+    in: query
+    type: string
+    required: false
+    description: "필터링할 장르명 (미입력 시 전체 조회)"
+
+responses:
+  200:
+    description: "성공적으로 목록을 반환함"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "'k-pop' 장르의 글 목록을 성공적으로 가져왔습니다."
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 4
+              genre:
+                type: string
+                example: "k-pop"
+              title:
+                type: string
+                example: "Blue Valentine"
+              author:
+                type: string
+                example: "Artist Name"
+              content:
+                type: string
+                example: "노래 가사 본문..."
+              image_url:
+                type: string
+                example: "https://s3.amazonaws.com/bucket/image.jpg"
+  500:
+    description: "서버 내부 오류"

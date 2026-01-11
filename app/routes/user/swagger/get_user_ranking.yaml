@@ -1,0 +1,67 @@
+summary: "전체 유저 랭킹 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 유저의 `ranking_score`를 기준으로 높은 순서(내림차순)대로 유저 목록을 가져옵니다.
+  2. 랭킹 페이지에서 TOP 10, TOP 50 등을 구현할 때 사용하며, 각 유저의 상세 실력 지표를 모두 포함합니다.
+  3. `ranking_score`가 없는 유저는 결과에서 제외됩니다.
+
+  **요청 URL 예시:**
+  - 기본 조회 (10명): `GET /user/ranking`
+  - 상위 30명 조회: `GET /user/ranking?limit=30`
+
+  **반환 데이터(Response Data) 의미:**
+  - `rank`: **현재 순위** => 랭킹 점수 기준 1위부터 순서대로 부여된 번호입니다.
+  - `account`: **유저 정보** => 랭킹에 표시될 유저의 기본 프로필입니다.
+    - `user_id`: **유저 고유 번호** => 유저 식별을 위한 DB ID입니다.
+    - `username`: **닉네임** => 랭킹에 표시될 이름입니다.
+    - `ranking_score`: **종합 점수** => 랭킹 산정의 기준이 된 점수입니다.
+  - `stats`: **상세 실력 지표** => 순위 외에 유저의 실력을 증명하는 수치들입니다.
+    - `best_cpm`: **최고 타수** => 유저의 역대 최고 CPM입니다.
+    - `avg_accuracy`: **평균 정확도** => 유저의 전체 연습 평균 정확도입니다.
+    - `play_count`: **총 연습 횟수** => 얼마나 꾸준히 연습했는지 보여주는 지표입니다.
+
+parameters:
+  - name: limit
+    in: query
+    type: integer
+    required: false
+    default: 10
+    description: "가져올 상위 유저의 수"
+
+responses:
+  200:
+    description: "랭킹 리스트 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "상위 10명의 상세 정보를 성공적으로 가져왔습니다."}
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              rank: {type: integer, example: 1}
+              account:
+                type: object
+                properties:
+                  user_id: {type: integer}
+                  username: {type: string}
+                  email: {type: string}
+                  profile_pic: {type: string}
+                  ranking_score: {type: integer}
+              stats:
+                type: object
+                properties:
+                  play_count: {type: integer}
+                  max_combo: {type: integer}
+                  avg_accuracy: {type: number}
+                  best_cpm: {type: integer}
+                  avg_cpm: {type: number}
+                  best_wpm: {type: integer}
+                  avg_wpm: {type: number}
+  500:
+    description: "서버 내부 오류"

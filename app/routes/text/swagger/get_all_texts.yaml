@@ -1,0 +1,50 @@
+summary: "전체 텍스트 목록 조회"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  - 데이터베이스에 등록된 모든 타자 연습용 텍스트를 ID 순으로 정렬하여 반환합니다.
+  - 필터링 없이 전체 데이터를 가져오므로, 데이터 관리 및 전체 목록 페이지 구성 시 사용합니다.
+
+  **요청 URL 예시:**
+  - `GET /text/all`
+
+  **반환 데이터(Response Data) 의미:**
+  - `id`: **글 고유 번호** => 데이터베이스에 저장된 텍스트의 고유 식별 ID입니다.
+  - `genre`: **장르** => 글의 카테고리(poem, novel, k-pop 등)입니다.
+  - `title`: **글 제목** => 연습용 텍스트의 제목입니다.
+  - `author`: **작가/아티스트** => 원작자 또는 가수 이름입니다.
+  - `content`: **본문 내용** => 실제 타자 연습에 사용되는 전체 텍스트 본문입니다.
+  - `image_url`: **이미지 주소** => S3 버킷에 저장된 해당 글의 배경 또는 썸네일 이미지 URL입니다.
+
+responses:
+  200:
+    description: "모든 텍스트 리스트를 성공적으로 반환함"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "전체 글 15개를 성공적으로 가져왔습니다."
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer, example: 1}
+              genre: {type: string, example: "poem"}
+              title: {type: string, example: "서시"}
+              author: {type: string, example: "윤동주"}
+              content: {type: string, example: "죽는 날까지 하늘을 우러러..."}
+              image_url: {type: string, example: "https://s3.amazonaws.com/sample.jpg"}
+  500:
+    description: "DB 조회 실패 등 서버 내부 오류"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "전체 목록을 불러오는 중 서버 오류가 발생했습니다."}

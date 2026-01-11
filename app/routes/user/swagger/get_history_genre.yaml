@@ -1,0 +1,69 @@
+summary: "유저의 장르별 연습 기록 필터링 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 특정 유저(`user_id`)의 기록 중, 요청한 **특정 장르(genre)**에 해당하는 데이터만 선별하여 최신순으로 반환합니다.
+  2. 장르 정보는 `TypingText` 테이블에 있으므로, 두 테이블을 JOIN하여 정확한 필터링을 수행합니다.
+  3. 결과 데이터 구조는 전체/최근 기록 API와 동일하게 유지하여 프론트엔드 컴포넌트 호환성을 보장합니다.
+
+  **요청 URL 예시:**
+  - `GET /user/history/genre/10?genre=k-pop`
+  - `GET /user/history/genre/10?genre=poem`
+
+  **반환 데이터(Response Data) 의미:**
+  - `result_id`: **기록 고유 번호** => 연습 결과 데이터의 식별 ID입니다.
+  - `cpm / wpm`: **타수 지표** => 당시 달성한 분당 타수와 단어수입니다.
+  - `accuracy`: **정확도** => 해당 연습의 정확도(%) 수치입니다.
+  - `combo`: **최대 콤보** => 해당 판에서 끊기지 않고 이어간 최대 타수입니다.
+  - `date`: **연습 일시** => 연습이 완료된 날짜와 시간입니다. (YYYY-MM-DD HH:mm)
+  - `text_info`: **연습한 글 정보** => 어떤 글을 연습했는지에 대한 상세 정보 객체입니다.
+    - `id`: **글 ID** => 원본 글의 고유 번호입니다.
+    - `title`: **글 제목** => 연습한 글의 제목입니다.
+    - `genre`: **장르** => 요청한 파라미터와 일치하는 장르명입니다.
+    - `image_url`: **이미지 주소** => 글과 관련된 S3 이미지 주소입니다.
+
+parameters:
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "기록을 조회할 유저의 고유 ID"
+  - name: genre
+    in: query
+    type: string
+    required: true
+    description: "필터링할 장르명 (예: k-pop, poem, novel, proverb 등)"
+
+responses:
+  200:
+    description: "장르별 필터링 기록 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "'k-pop' 장르 기록 12개를 성공적으로 가져왔습니다."}
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              result_id: {type: integer}
+              cpm: {type: integer}
+              wpm: {type: integer}
+              accuracy: {type: number}
+              combo: {type: integer}
+              date: {type: string}
+              text_info:
+                type: object
+                properties:
+                  id: {type: integer}
+                  title: {type: string}
+                  author: {type: string}
+                  genre: {type: string}
+                  image_url: {type: string}
+  400:
+    description: "장르 파라미터(genre) 누락 시"
+  500:
+    description: "서버 내부 오류"

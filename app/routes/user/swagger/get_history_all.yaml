@@ -1,0 +1,62 @@
+summary: "유저의 전체 연습 기록 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 특정 유저(`user_id`)가 지금까지 연습한 모든 타자 기록을 최신순으로 조회합니다.
+  2. **데이터 무결성:** `INNER JOIN`을 통해 원본 글(`TypingText`)이 삭제된 기록은 결과에서 자동으로 제외됩니다.
+  3. **재사용성:** 결과 데이터 내 `text_info` 구조는 최근 기록 API와 동일하여 프론트엔드 컴포넌트를 그대로 재사용할 수 있습니다.
+
+  **요청 URL 예시:**
+  - `GET /user/history/all/10`
+
+  **반환 데이터(Response Data) 의미:**
+  - `result_id`: **기록 고유 번호** => 연습 결과 데이터의 식별 ID입니다.
+  - `cpm / wpm`: **타수 지표** => 당시 달성한 분당 타수와 단어수입니다.
+  - `accuracy`: **정확도** => 해당 연습의 정확도(%) 수치입니다.
+  - `combo`: **최대 콤보** => 해당 연습에서 끊기지 않고 이어간 최대 타수입니다.
+  - `date`: **연습 일시** => 연습이 완료된 날짜와 시간입니다. (YYYY-MM-DD HH:mm)
+  - `text_info`: **연습한 글 정보** => 어떤 글을 연습했는지에 대한 상세 정보 객체입니다.
+    - `id`: **글 ID** => 원본 글의 고유 번호입니다.
+    - `title`: **글 제목** => 연습한 글의 제목입니다.
+    - `author`: **작가** => 글의 저자 또는 아티스트입니다.
+    - `genre`: **장르** => 글의 카테고리입니다.
+    - `image_url`: **이미지** => 글과 관련된 S3 이미지 주소입니다.
+
+parameters:
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "기록을 조회할 유저의 고유 ID"
+
+responses:
+  200:
+    description: "전체 기록 리스트 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "총 25개의 기록을 성공적으로 조회했습니다."}
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              result_id: {type: integer, example: 501}
+              cpm: {type: integer, example: 450}
+              wpm: {type: integer, example: 85}
+              accuracy: {type: number, example: 98.5}
+              combo: {type: integer, example: 120}
+              date: {type: string, example: "2026-01-10 14:30"}
+              text_info:
+                type: object
+                properties:
+                  id: {type: integer, example: 1}
+                  title: {type: string, example: "서시"}
+                  author: {type: string, example: "윤동주"}
+                  genre: {type: string, example: "poem"}
+                  image_url: {type: string, example: "https://example.com/image.jpg"}
+  500:
+    description: "서버 내부 오류"

@@ -1,0 +1,55 @@
+summary: "특정 글의 전 세계 최고 기록 조회"
+tags:
+  - Result
+
+description: |
+  **기능 설명:**
+  1. 특정 글(`text_id`)에서 역대 가장 높은 타수(CPM)를 기록한 유저의 정보를 조회합니다.
+  2. 랭킹 1위 유저의 닉네임, 프로필 사진, 타수, 정확도, 최대 콤보 및 달성 일자를 반환합니다.
+  3. 기록이 아예 없는 경우 기본값(No record, 0점)이 반환됩니다.
+
+  **요청 URL 예시:**
+  - `GET /text/results/best?text_id=1`
+
+  **반환 데이터(Response Data) 의미:**
+  - `top_player`: **1등 유저 닉네임** => 해당 글에서 최고 타수를 기록한 유저의 이름입니다.
+  - `profile_pic`: **프로필 이미지** => 1등 유저의 프로필 사진 URL입니다. (없을 시 null)
+  - `best_cpm`: **최고 타수** => 해당 글의 역대 최고 분당 타수(CPM)입니다.
+  - `best_wpm`: **최고 단어수** => 해당 글의 역대 최고 분당 단어수(WPM)입니다.
+  - `best_accuracy`: **최고 정확도** => 1등 기록 달성 당시의 정확도(%)입니다.
+  - `best_combo`: **최고 콤보** => 1등 기록 달성 당시에 세운 최대 콤보 수치입니다.
+  - `date`: **기록 달성일** => 전 세계 1등 기록이 수립된 날짜입니다.
+
+parameters:
+  - name: text_id
+    in: query
+    type: integer
+    required: true
+    description: "1등 기록을 조회할 글의 고유 ID"
+
+responses:
+  200:
+    description: "전 세계 1등 기록 조회 성공"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "전 세계 1등 기록을 성공적으로 가져왔습니다."
+        data:
+          type: object
+          properties:
+            top_player: {type: string, example: "타자마스터"}
+            profile_pic: {type: string, example: "http://example.com/profile.jpg"}
+            best_cpm: {type: integer, example: 850}
+            best_wpm: {type: integer, example: 120}
+            best_accuracy: {type: number, example: 99.8}
+            best_combo: {type: integer, example: 342}
+            date: {type: string, example: "2026-01-07"}
+  400:
+    description: "필수 파라미터(text_id) 누락"
+  500:
+    description: "서버 내부 오류"

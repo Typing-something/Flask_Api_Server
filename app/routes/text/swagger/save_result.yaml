@@ -1,0 +1,107 @@
+
+summary: "타자 연습 결과 저장 및 유저 통계 업데이트"
+tags:
+  - Result
+
+description: |
+  **요청 정보:**
+  - **URL:** `POST /text/results`
+  - **Content-Type:** `application/json`
+  
+  **기능 설명:**
+  1. 새로운 타자 연습 결과(`CPM`, `WPM`, `정확도`, `콤보`)를 DB에 저장합니다.
+  2. 해당 유저의 누적 통계를 즉시 업데이트합니다.
+     - `play_count`: 전체 플레이 횟수 +1
+     - `avg_accuracy`: 실시간 평균 정확도 재계산
+     - `max_combo`: 신기록 달성 시 최고 콤보 갱신
+  3. 반환 데이터(Response Data) 의미:
+  - `result_id`: **결과 고유 번호** => 이번에 저장된 연습 기록의 고유 DB ID입니다.
+  - `play_count`: **총 플레이 횟수** => 유저가 지금까지 완료한 전체 연습 횟수입니다.
+  - `avg_accuracy`: **평균 정확도** => 모든 연습 기록의 실시간 평균 정확도(%)입니다.
+  - `max_combo`: **최고 콤보** => 유저가 지금까지 달성한 역대 가장 높은 콤보 수치입니다.
+  - `is_new_record`: **신기록 여부** => 이번 판의 콤보가 유저의 기존 최고 기록을 경신했는지 여부(true/false)입니다.
+  - `best_cpm`: **최고 타수** => 유저의 역대 최고 분당 타수(CPM)입니다.
+  - `avg_cpm`: **평균 타수** => 유저의 전체 연습 기록 평균 타수입니다.
+  - `best_wpm`: **최고 단어수** => 유저의 역대 최고 분당 단어수(WPM)입니다.
+  - `avg_wpm`: **평균 단어수** => 유저의 전체 연습 기록 평균 단어수입니다.
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - text_id
+        - user_id
+        - cpm
+        - accuracy
+        - combo
+      properties:
+        text_id:
+          type: integer
+          example: 1
+          description: "연습한 글의 ID"
+        user_id:
+          type: integer
+          example: 10
+          description: "현재 로그인한 유저의 ID"
+        cpm:
+          type: integer
+          example: 450
+          description: "분당 타자수 (Characters Per Minute)"
+        wpm:
+          type: integer
+          example: 85
+          default: 0
+          description: "분당 단어수 (Words Per Minute)"
+        accuracy:
+          type: number
+          format: float
+          example: 98.5
+          description: "이번 판의 정확도 (0~100)"
+        combo:
+          type: integer
+          example: 120
+          description: "이번 판에서 달성한 최대 연속 콤보"
+
+responses:
+  201:
+    description: "저장 및 통계 업데이트 완료"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "연습 결과가 저장되었고 유저 통계가 갱신되었습니다."
+        data:
+          type: object
+          properties:
+            result_id:
+              type: integer
+              example: 501
+              description: "생성된 결과 기록의 고유 ID"
+            play_count:
+              type: integer
+              example: 15
+              description: "갱신된 누적 플레이 횟수"
+            avg_accuracy:
+              type: number
+              example: 96.45
+              description: "갱신된 전체 평균 정확도"
+            max_combo:
+              type: integer
+              example: 150
+              description: "유저의 역대 최고 콤보"
+            is_new_record:
+              type: boolean
+              example: false
+              description: "이번 판에서 최고 콤보 신기록을 달성했는지 여부"
+  400:
+    description: "데이터 누락 또는 형식 오류 (JSON 없음, 필수값 누락 등)"
+  404:
+    description: "존재하지 않는 유저 ID"
+  500:
+    description: "DB 트랜잭션 실패 등 서버 내부 오류"
