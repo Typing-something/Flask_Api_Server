@@ -16,7 +16,7 @@ GET_HISTORY_ALL_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_all.y
 GET_HISTORY_RECENT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_recent.yaml')
 GET_HISTORY_GENRE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_genre.yaml')
 GET_USER_RANKING_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_ranking.yaml')
-
+GET_USER_FAVORITE_IDS_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_favorites.yaml')
 # 1. 내 프로필 요약 정보
 @user_blueprint.route('/profile/<int:user_id>', methods=['GET'])
 @swag_from(GET_USER_PROFILE_YAML_PATH)
@@ -242,3 +242,28 @@ def get_user_ranking():
     except Exception as e:
         current_app.logger.error(f"❌ 랭킹 조회 에러: {str(e)}")
         return api_response(success=False, error_code=500, message="서버 오류 발생", status_code=500)
+    
+
+# 6. 유저가 찜한 글 ID 목록 조회
+@user_blueprint.route('/favorites/ids/<int:user_id>', methods=['GET'])
+@swag_from(GET_USER_FAVORITE_IDS_YAML_PATH) # 나중에 YAML 연결
+def get_favorite_text_ids(user_id):
+    try:
+        # 1. 유저 존재 여부 확인
+        user = User.query.get(user_id)
+        if not user:
+            return api_response(success=False, error_code=404, message="유저를 찾을 수 없습니다.", status_code=404)
+
+        favorite_ids = [text.id for text in user.favorite_texts]
+
+        current_app.logger.info(f" [찜ID조회] 유저 {user_id} - 총 {len(favorite_ids)}개의 찜한 글 ID 반환")
+
+        return api_response(
+            success=True,
+            data={"favorite_text_ids": favorite_ids},
+            message=f"유저가 찜한 글 ID {len(favorite_ids)}개를 성공적으로 가져왔습니다."
+        )
+
+    except Exception as e:
+        current_app.logger.error(f" 찜한 ID 조회 에러: {str(e)}")
+        return api_response(success=False, error_code=500, message="조회 중 서버 오류가 발생했습니다.", status_code=500)

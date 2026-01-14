@@ -30,7 +30,7 @@ GET_TEXT_DETAIL_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_text_detail.y
 DELETE_TEXT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'delete_text.yaml')
 POST_RESULT_YAML_PATH =  os.path.join(BASE_DIR, 'swagger', 'save_result.yaml')
 GET_BEST_DATA_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_best_data.yaml')
-
+POST_FAVORITE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'post_favorite_text.yaml')
 # 0. 글쓰기 페이지 (HTML 폼 제공 및 저장 - 이미지 업로드 기능 추가)
 @text_blueprint.route('/add', methods=['GET', 'POST'])
 @swag_from(ADD_TEXT_YAML_PATH)
@@ -484,3 +484,50 @@ def get_global_best_score():
     except Exception as e:
         current_app.logger.error(f"❌ 명예의 전당 조회 오류: {str(e)}")
         return api_response(success=False, error_code=500, message="서버 오류 발생", status_code=500)
+    
+
+    # 7. 찜하기 토글 (등록/취소)
+@text_blueprint.route('/favorite', methods=['POST'])
+@swag_from(POST_FAVORITE_YAML_PATH) # 나중에 Swagger 파일 만들면 연결하세요!
+def toggle_favorite():
+    try:
+        data = request.get_json()
+        u_id = data.get('user_id')
+        t_id = data.get('text_id')
+
+        # 1. 필수값 체크
+        if not u_id or not t_id:
+            return api_response(success=False, message="user_id와 text_id가 모두 필요합니다.", status_code=400)
+
+        # 2. 유저 및 텍스트 존재 확인
+        user = User.query.get(u_id)
+        text = TypingText.query.get(t_id)
+
+        if not user or not text:
+            return api_response(success=False, message="유저 또는 글을 찾을 수 없습니다.", status_code=404)
+
+        existing_favorite = user.favorite_texts.filter_by(id=t_id).first()
+
+        if existing_favorite:
+            user.favorite_texts.remove(text)
+            message = f"'{text.title}' 찜하기를 취소했습니다."
+            is_favorite = False
+        else:
+            user.favorite_texts.append(text)
+            message = f"'{text.title}' 글을 찜 목록에 추가했습니다."
+            is_favorite = True
+
+        db.session.commit()
+        
+        current_app.logger.info(f" [찜하기 토글] 유저:{u_id}, 글:{t_id}, 결과:{is_favorite}")
+
+        return api_response(
+            success=True, 
+            message=message,
+            data={"is_favorite": is_favorite}
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"❌ 찜하기 에러: {str(e)}")
+        return api_response(success=False, message="처리 중 오류가 발생했습니다.", status_code=500)

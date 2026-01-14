@@ -1,0 +1,56 @@
+summary: "찜하기 토글 (등록/취소)"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  1. 특정 유저(`user_id`)가 특정 글(`text_id`)을 찜 목록에 추가하거나, 이미 있다면 취소합니다.
+  2. **토글 방식:** 동일한 요청을 보낼 때마다 `찜 등록 <-> 찜 취소` 상태가 실시간으로 전환됩니다.
+  3. **데이터 가공:** 응답의 `is_favorite` 값을 통해 현재 최종 상태를 바로 확인하여 프론트엔드 UI(하트 아이콘 등)를 즉시 업데이트할 수 있습니다.
+
+  **요청 URL 예시:**
+  - `POST /text/favorite`
+  - Body: `{ "user_id": 1, "text_id": 10 }`
+
+  **반환 데이터(Response Data) 의미:**
+  - `success`: **성공 여부** => 요청이 정상적으로 처리되었는지 나타냅니다 (true/false).
+  - `message`: **결과 메시지** => 어떤 글이 등록되었는지 혹은 취소되었는지 상세 내용을 포함합니다.
+  - `is_favorite`: **최종 찜 상태** => 처리가 완료된 후 해당 글의 찜 여부입니다. (true: 찜 됨 / false: 찜 해제됨)
+
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - user_id
+        - text_id
+      properties:
+        user_id:
+          type: integer
+          description: "유저 고유 ID"
+          example: 1
+        text_id:
+          type: integer
+          description: "찜 상태를 변경할 글의 ID"
+          example: 10
+
+responses:
+  200:
+    description: "찜하기 토글 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "'소설 제목' 글을 찜 목록에 추가했습니다."}
+        data:
+          type: object
+          properties:
+            is_favorite: {type: boolean, example: true, description: "최종 찜 상태"}
+  400:
+    description: "필수 파라미터 누락"
+  404:
+    description: "유저 또는 글을 찾을 수 없음"
+  500:
+    description: "서버 내부 오류"
