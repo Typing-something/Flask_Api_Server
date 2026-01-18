@@ -23,12 +23,12 @@ jobs:
         pip install -r requirements.txt
         pip install pytest-json-report locust requests
 
-    # Step 1: 가상환경에서 먼저 단위 테스트 실행 ㅋ
     - name: Pre-deployment Check (Pytest)
+      env:
+        PYTHONPATH: .
       run: |
         pytest --json-report --json-report-file=result.json
 
-    # Step 2: 테스트 성공 시에만 EC2 접속 및 배포 ㅋ
     - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@master
       with:
@@ -43,7 +43,6 @@ jobs:
           flask db upgrade
           sudo systemctl restart flask_app
 
-    # Step 3: 배포된 실서버를 대상으로 부하 테스트 및 통합 리포트 전송 ㅋ
     - name: Post-deployment Load Test & Report
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -58,6 +57,6 @@ jobs:
         TARGET_HOST: ${{ secrets.TARGET_HOST }}
         FLASK_ENV: production
         PORT: 5000
+        PYTHONPATH: .
       run: |
-        # Step 1에서 생성된 result.json을 사용하여 리포트를 합칩니다 ㅋ
         python run_all_tests.py
