@@ -16,7 +16,7 @@ GET_HISTORY_ALL_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_all.y
 GET_HISTORY_RECENT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_recent.yaml')
 GET_HISTORY_GENRE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_genre.yaml')
 GET_USER_RANKING_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_ranking.yaml')
-GET_USER_FAVORITE_IDS_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_favorites.yaml')
+GET_USER_FAVORITE_IDS_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_favorites_ids.yaml')
 # 1. 내 프로필 요약 정보
 @user_blueprint.route('/profile/<int:user_id>', methods=['GET'])
 @swag_from(GET_USER_PROFILE_YAML_PATH)

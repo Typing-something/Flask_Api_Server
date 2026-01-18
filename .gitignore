@@ -34,3 +34,20 @@ instance/
 Thumbs.db
 
 collect_text.py
+
+# --- 테스트 및 리포트 관련 (추가 추천) ---
+result.json
+perf_stats.csv
+perf_stats_history.csv
+perf_failures.csv
+perf_exceptions.csv
+.coverage
+htmlcov/
+
+# --- IDE 관련 (VS Code 등을 쓴다면) ---
+.vscode/
+.idea/
+
+application.log    # 특정 파일 지칭
+*.log              # 모든 .log 확장자 파일 제외 ㅋ
+logs/              # 만약 logs 폴더를 따로 쓴다면 폴더 통째로 제외

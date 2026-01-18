@@ -88,3 +88,42 @@ class TypingResult(db.Model):
 
     def __repr__(self):
         return f'<Result ID:{self.id} User:{self.user_id} CPM:{self.cpm}>'
+
+class TestReport(db.Model):
+    __tablename__ = 'test_reports'
+    id = db.Column(db.Integer, primary_key=True)
+    test_time = db.Column(db.DateTime, default=datetime.now)
+    git_commit = db.Column(db.String(40))
+    
+    total_tests = db.Column(db.Integer)
+    # ✅ 아래 두 필드가 빠져있어서 에러가 났을 확률이 높습니다! ㅋ
+    passed_tests = db.Column(db.Integer, default=0)
+    failed_tests = db.Column(db.Integer, default=0)
+    
+    is_passed = db.Column(db.Boolean)
+    user_count = db.Column(db.Integer) 
+
+    case_results = db.relationship('TestCaseResult', backref='report', cascade="all, delete-orphan")
+    api_performances = db.relationship('ApiPerformance', backref='report', cascade="all, delete-orphan")
+
+class TestCaseResult(db.Model):
+    __tablename__ = 'test_case_results'
+    id = db.Column(db.Integer, primary_key=True)
+    # 외래키 (부모의 id를 가리킴)
+    report_id = db.Column(db.Integer, db.ForeignKey('test_reports.id'), nullable=False)
+    
+    test_name = db.Column(db.String(255)) 
+    status = db.Column(db.String(50))     # passed, failed
+    message = db.Column(db.Text)
+
+class ApiPerformance(db.Model):
+    __tablename__ = 'api_performances'
+    id = db.Column(db.Integer, primary_key=True)
+    # 외래키 (부모의 id를 가리킴)
+    report_id = db.Column(db.Integer, db.ForeignKey('test_reports.id'), nullable=False)
+    
+    method = db.Column(db.String(10))      # GET, POST
+    endpoint = db.Column(db.String(255))   # /text/main
+    avg_latency = db.Column(db.Float)      # 여기서 상세히 기록하니까 부하테스트 종합 평균은 필요 없음 ㅋ
+    rps = db.Column(db.Float)              
+    fail_count = db.Column(db.Integer)

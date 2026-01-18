@@ -49,8 +49,16 @@ def create_app(config_mode=None):
             app.config['SQLALCHEMY_DATABASE_URI'] = LOCAL_MYSQL_URL
         else:
             # MySQL 설정이 없으면 비상용으로 로컬 SQLite 파일 사용
-            BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(BASE_DIR, '../instance/local.db')
+            basedir = os.path.abspath(os.path.dirname(__file__))
+            # 2. 한 단계 위인 루트 폴더(study_flask)로 이동 후 instance 폴더 지정
+            instance_path = os.path.abspath(os.path.join(basedir, os.pardir, 'instance'))
+            
+            # 3. 폴더가 없으면 에러 방지를 위해 생성
+            if not os.path.exists(instance_path):
+                os.makedirs(instance_path)
+                
+            db_path = os.path.join(instance_path, 'local.db')
+            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=True)
     login_manager.init_app(app)
@@ -82,12 +90,13 @@ def create_app(config_mode=None):
     from .routes.main.views import main_blueprint
     from .routes.text.views import text_blueprint
     from .routes.user.views import user_blueprint
+    from .routes.reports.views import report_blueprint
 
     app.register_blueprint(auth_blueprint, url_prefix='/auth')
     app.register_blueprint(main_blueprint, url_prefix='/')
     app.register_blueprint(text_blueprint, url_prefix='/text')
     app.register_blueprint(user_blueprint, url_prefix='/user')
-
+    app.register_blueprint(report_blueprint, url_prefix='/admin')
     # 4. 사용자 로더
     @login_manager.user_loader
     def load_user(user_id):
@@ -97,6 +106,7 @@ def create_app(config_mode=None):
     setup_logging(app, ENV)
 
     with app.app_context():
+        db.create_all()
         app.logger.info("="*50)
         app.logger.info(f"🚀 타이핑 게임 서버 시작 (모드: {ENV.upper()})")
         

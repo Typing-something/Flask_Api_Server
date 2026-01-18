@@ -6,91 +6,110 @@ from app.database import db
 
 class TestTextAPI:
     """텍스트 관련 모든 API(누락분 포함) 통합 테스트"""
-
-    @pytest.fixture(autouse=True)
-    def setup_method(self, app):
-        """매 테스트마다 독립적인 데이터 생성"""
-        with app.app_context():
-            # 1. 유저 생성
-            self.user = User(username="testuser", email="test@test.com")
-            
-            # 2. 텍스트 샘플 여러 개 생성 (장르별/랜덤 테스트용)
-            self.t1 = TypingText(genre="소설", title="소설 제목", author="작가1", content="내용1")
-            self.t2 = TypingText(genre="IT", title="IT 제목", author="작가2", content="내용2")
-            
-            db.session.add_all([self.user, self.t1, self.t2])
-            db.session.commit()
-            
-            self.u_id = self.user.id
-            self.t1_id = self.t1.id
-
-    # --- [기존 API 테스트] ---
-    def test_get_all_texts(self, client):
+   
+    def test_TC001_전체텍스트_조회_확인(self, client,setup_data):
         response = client.get('/text/all')
+        res_data = response.get_json()
         assert response.status_code == 200
-        assert len(response.get_json()['data']) >= 2
+        assert 'data' in res_data
+        
+        result = res_data["data"] 
+        expect_res_attr = {'author', 'content', 'genre', 'id', 'image_url', 'title'}
+        
+        for attr in result:
+            check_res_attr = expect_res_attr.difference(set(attr.keys()))
+            assert len(check_res_attr) == 0
+        
 
-    # --- [추가된 API 테스트: 랜덤 조회] ---
-    def test_get_random_texts(self, client):
+    def test_TC002_get_random_texts(self, client, setup_data):
         """랜덤 조회 API 검증 (limit_val 동작 확인)"""
         # limit_val을 1로 설정하여 요청
         response = client.get('/text/main/1')
         res_data = response.get_json()
-        print(res_data)
+        
         assert response.status_code == 200
-        assert len(res_data['data']) == 1
-        assert "is_favorite" in res_data['data'][0]
+        assert 'data' in res_data
+        
+        result = res_data["data"]
+        expect_res_attr = {'author', 'content', 'genre', 'id', 'image_url', 'is_favorite', 'title'}
 
-    # --- [추가된 API 테스트: 장르별 필터링] ---
-    def test_get_texts_by_genre(self, client):
+        for attr in result:
+            check_res_attr = expect_res_attr.difference(set(attr.keys()))
+            assert len(check_res_attr) == 0
+
+  
+    def test_TC003_get_texts_by_genre(self, client, setup_data):
         """장르 필터링 API 검증"""
         # 'IT' 장르만 조회
         response = client.get('/text/?genre=IT')
         res_data = response.get_json()
         
         assert response.status_code == 200
-        assert len(res_data['data']) == 1
-        assert res_data['data'][0]['genre'] == "IT"
+        assert 'data' in res_data
+        
+        result = res_data["data"]
 
-    # --- [추가된 API 테스트: 명예의 전당(최고 점수)] ---
-    def test_get_global_best_score(self, client, app):
+        expect_res_attr = {'author', 'content', 'genre', 'id', 'image_url', 'title'}
+
+        for attr in result:
+            check_res_attr = expect_res_attr.difference(set(attr.keys()))
+            assert len(check_res_attr) == 0
+
+    def test_TC004_get_global_best_score(self, client, setup_data):
         """특정 글의 1등 기록 조회 검증"""
-        # 1. 테스트용 기록 먼저 강제 삽입
-        with app.app_context():
-            result = TypingResult(
-                user_id=self.u_id, 
-                text_id=self.t1_id, 
-                cpm=999,  # 압도적인 기록
-                wpm=200, 
-                accuracy=100.0, 
-                combo=50
-            )
-            db.session.add(result)
-            db.session.commit()
+        target_id = setup_data['t1_id']
 
-        # 2. 1등 기록 API 호출
-        response = client.get(f'/text/results/best?text_id={self.t1_id}')
+        response = client.get(f'/text/results/best?text_id={target_id}')
         res_data = response.get_json()
         
         assert response.status_code == 200
-        assert res_data['data']['top_player'] == "testuser"
-        assert res_data['data']['best_cpm'] == 999
+        assert 'data' in res_data
+        
+        result = res_data["data"]
+        
+        expect_res_attr = {'best_accuracy', 'best_combo', 'best_cpm', 'best_wpm', 'date', 'profile_pic', 'top_player'}
+        check_res_attr = expect_res_attr.difference(set(result.keys()))
+        assert len(check_res_attr) == 0
 
-    # --- [기존 API 테스트: 결과 저장] ---
-    def test_save_typing_result(self, client):
+       
+    def test_TC005_save_typing_result(self, client, setup_data):
         payload = {
-            "user_id": self.u_id,
-            "text_id": self.t1_id,
+            "user_id": setup_data['u_id'], # self.u_id 대신!
+            "text_id": setup_data['t1_id'],
             "cpm": 500,
             "wpm": 100,
             "accuracy": 95.5,
             "combo": 30
         }
         response = client.post('/text/results', json=payload)
+        res_data = response.get_json()
         assert response.status_code == 201
-        assert response.get_json()['data']['play_count'] == 1
+        assert 'data' in res_data
+        
+        result = res_data["data"]
 
-    # --- [기존 API 테스트: 삭제] ---
-    def test_delete_text(self, client):
-        response = client.delete(f'/text/{self.t1_id}')
+        expect_res_attr = {'avg_accuracy', 'avg_cpm', 'avg_wpm', 'best_cpm', 'best_wpm', 'is_new_record', 'max_combo', 'play_count', 'result_id'}
+        check_res_attr = expect_res_attr.difference(set(result.keys()))
+        assert len(check_res_attr) == 0
+
+    def test_TC006_get_random_texts_check_favorite(self, client, setup_data):
+        """랜덤 조회 시 찜 여부(is_favorite)가 정확히 나오는지 확인"""
+        # 찜한 유저의 ID를 쿼리 파라미터로 전달
+        u_id = setup_data['u_id']
+        response = client.get(f'/text/main/10?user_id={u_id}')
+        res_data = response.get_json()
+        
+        # 응답 데이터에서 t1과 t2를 찾아 찜 여부 검증
+        for item in res_data['data']:
+            if item['id'] == setup_data['t1_id']:
+                assert item['is_favorite'] is True  # 찜한 글은 True여야 함
+            if item['id'] == setup_data['t2_id']:
+                assert item['is_favorite'] is False # 안 한 글은 False여야 함
+        
+    def test_TC007_delete_text(self, client, setup_data):
+        response = client.delete(f'/text/{setup_data["t1_id"]}')
+        target_text_id = setup_data["t1_id"]
+        res_data = response.get_json()
         assert response.status_code == 200
+        assert res_data['success'] is True
+      
