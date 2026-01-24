@@ -6,7 +6,7 @@ class TypingFullCircuitTest(HttpUser):
 
     def on_start(self):
         # 💡 전략 1: 테스트 전용 유저 ID 범위 지정 (예: 100~110번 유저가 테스트용일 때)
-        self.user_id = random.randint(100, 110) 
+        self.user_id = 2
         self.target_text_id = None
         self.target_result_id = None
 
