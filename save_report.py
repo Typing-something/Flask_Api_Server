@@ -24,7 +24,7 @@ def run_commands():
         "--headless", 
         "-u", "50", 
         "-r", "5", 
-        "--run-time", "1m", 
+        "--run-time", "10", 
         "--csv", "perf",
         "--host", target_host
     ], check=True)
@@ -85,6 +85,14 @@ def send_combined_report():
     base_url = os.getenv("SERVER_URL", "http://localhost:5000")
     target_url = f"{base_url}/admin/report"
     print(f"📤 [DEBUG] 전송 목적지: {target_url}")
+
+    print("-" * 50)
+    print(f"🚀 [REAL-TIME CHECK] 전송 시작!")
+    print(f"📍 목적지 주소: {target_url}")
+    print(f"📦 데이터 크기: {len(json.dumps(payload))} bytes")
+    print(f"🔑 환경변수 SERVER_URL 상태: {os.getenv('SERVER_URL')}")
+    print("-" * 50)
+
     
     try:
         response = requests.post(target_url, json=payload, timeout=20)
