@@ -2,7 +2,9 @@ name: CI Test, Report and Deploy
 
 on:
   push:
-    branches: [ "main" ] 
+    branches: [ "main" ]
+  schedule:
+    - cron: '*/10 * * * *'
 
 jobs:
   test-and-deploy:
