@@ -5,8 +5,9 @@ class TypingFullCircuitTest(HttpUser):
     wait_time = between(1, 3)
 
     def on_start(self):
-        # 💡 전략 1: 테스트 전용 유저 ID 범위 지정 (예: 100~110번 유저가 테스트용일 때)
-        self.user_id = 2
+        # 💡 MySQL 명단에서 확인된 실제 유저 ID들 중 하나를 랜덤하게 선택합니다.
+        # 명단에 1, 2, 3, 4, 5번이 있는 것을 확인했으므로 해당 범위를 사용합니다.
+        self.user_id = 3
         self.target_text_id = None
         self.target_result_id = None
 
@@ -14,11 +15,16 @@ class TypingFullCircuitTest(HttpUser):
     @tag('text_get')
     @task(10)
     def text_list_flow(self):
-        # 1. 전체 조회
-        with self.client.get("/text/all", name="/text/all") as r:
+        # 1. 전체 조회 (with 블록 에러 해결을 위해 catch_response=True 추가)
+        with self.client.get("/text/all", name="/text/all", catch_response=True) as r:
             if r.status_code == 200:
                 data = r.json().get('data', [])
-                if data: self.target_text_id = random.choice(data)['id']
+                if data: 
+                    self.target_text_id = random.choice(data)['id']
+                r.success()
+            else:
+                r.failure(f"Failed to get texts: {r.status_code}")
+
         # 2. 랜덤 조회
         self.client.get(f"/text/main/10?user_id={self.user_id}", name="/text/main/[limit]")
         # 3. 장르별 필터링
@@ -37,11 +43,16 @@ class TypingFullCircuitTest(HttpUser):
     @task(5)
     def text_history_flow(self):
         if self.target_text_id:
-            # 6. 지문별 내 이력
-            with self.client.get(f"/text/{self.target_text_id}/history/{self.user_id}", name="/text/[id]/history/[uid]") as r:
+            # 6. 지문별 내 이력 (catch_response=True 추가)
+            with self.client.get(f"/text/{self.target_text_id}/history/{self.user_id}", name="/text/[id]/history/[uid]", catch_response=True) as r:
                 if r.status_code == 200:
                     history = r.json().get('data', {}).get('history', [])
-                    if history: self.target_result_id = history[0]['result_id']
+                    if history: 
+                        self.target_result_id = history[0]['result_id']
+                    r.success()
+                else:
+                    r.failure(f"History fetch failed: {r.status_code}")
+
             # 7. 정밀 결과 상세
             if self.target_result_id:
                 self.client.get(f"/text/results/{self.target_text_id}/{self.user_id}/{self.target_result_id}", name="/text/results/[tid]/[uid]/[rid]")
@@ -50,7 +61,7 @@ class TypingFullCircuitTest(HttpUser):
     @tag('user_get')
     @task(6)
     def user_profile_flow(self):
-        # 8. 내 프로필 요약
+        # 8. 내 프로필 요약 (실제 user_id 사용)
         self.client.get(f"/user/profile/{self.user_id}", name="/user/profile/[id]")
         # 9. 전체 유저 리스트
         self.client.get("/user/users", name="/user/users")
@@ -73,15 +84,21 @@ class TypingFullCircuitTest(HttpUser):
     @tag('write_heavy')
     @task(3)
     def result_write_and_cleanup(self):
-        # 15. 결과 저장 (로직 복잡한 놈) 후 삭제
+        # 15. 결과 저장 후 삭제 (catch_response=True 추가)
         if self.target_text_id:
             payload = {
-                "user_id": self.user_id, "text_id": self.target_text_id,
-                "cpm": random.randint(300, 600), "wpm": 80, "accuracy": 98.0, "combo": 50
+                "user_id": self.user_id, 
+                "text_id": self.target_text_id,
+                "cpm": random.randint(300, 600), 
+                "wpm": 80, 
+                "accuracy": 98.0, 
+                "combo": 50
             }
-            with self.client.post("/text/results", json=payload, name="/text/results") as r:
+            with self.client.post("/text/results", json=payload, name="/text/results", catch_response=True) as r:
                 if r.status_code == 201:
                     rid = r.json().get('data', {}).get('result_id')
                     if rid:
-                        # 즉시 삭제하여 더미 유저의 데이터가 무한정 쌓이는 것 방지
                         self.client.delete(f"/text/results/{self.target_text_id}/{self.user_id}/{rid}", name="/text/results/[tid]/[uid]/[rid]")
+                    r.success()
+                else:
+                    r.failure(f"Post result failed: {r.status_code}")
