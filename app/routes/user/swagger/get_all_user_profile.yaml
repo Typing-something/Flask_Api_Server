@@ -1,0 +1,70 @@
+summary: "모든 유저의 상세 정보 및 통계 데이터 전수 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 데이터베이스에 등록된 **모든 유저의 리스트**를 가져와 각 유저의 계정 정보와 실력 통계 데이터를 반환합니다.
+  2. 필터링이나 페이지네이션 없이 전수 데이터를 제공하므로, 전체 랭킹 산출이나 관리자 페이지에서 활용하기 적합합니다.
+  3. **재사용성:** 결과 데이터 내 `account` 및 `stats` 구조는 단일 프로필 조회 API와 동일하여 프론트엔드 컴포넌트 호환성을 보장합니다.
+
+  **요청 URL 예시:**
+  - `GET /user/users`
+
+  **반환 데이터(Response Data) 의미:**
+  - **account (계정 정보)**:
+    - `user_id`: **유저 고유 번호** => 시스템에서 부여된 유저의 식별 ID입니다.
+    - `username`: **닉네임** => 서비스 내에서 표시되는 이름입니다.
+    - `email`: **이메일** => 유저의 고유 계정 주소입니다.
+    - `profile_pic`: **프로필 이미지** => 유저의 프로필 사진 URL입니다.
+    - `ranking_score`: **랭킹 점수** => 랭킹 산출의 기준이 되는 점수입니다.
+  
+  - **stats (상세 통계)**:
+    - `play_count`: **총 연습 횟수** => 지금까지 완료한 모든 연습의 총합입니다.
+    - `max_combo`: **최대 콤보** => 역대 단일 연습 중 기록한 가장 높은 콤보 수입니다.
+    - `avg_accuracy`: **평균 정확도** => 모든 기록의 평균 정확도(%) 수치입니다.
+    - `best_cpm / avg_cpm`: **최고/평균 타수** => 분당 타수 지표입니다.
+    - `best_wpm / avg_wpm`: **최고/평균 단어수** => 분당 단어수 지표입니다.
+
+responses:
+  200:
+    description: "전체 유저 상세 데이터 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "모든 유저의 상세 데이터를 성공적으로 가져왔습니다."}
+        data:
+          type: object
+          properties:
+            users_len: {type: integer, example: 15}
+            users:
+              type: array
+              items:
+                type: object
+                properties:
+                  account:
+                    type: object
+                    properties:
+                      user_id: {type: integer, example: 1}
+                      username: {type: string, example: "타이핑마스터"}
+                      email: {type: string, example: "user@example.com"}
+                      profile_pic: {type: string, example: "https://example.com/p.jpg"}
+                      ranking_score: {type: integer, example: 1500}
+                  stats:
+                    type: object
+                    properties:
+                      play_count: {type: integer, example: 50}
+                      max_combo: {type: integer, example: 210}
+                      avg_accuracy: {type: number, example: 97.5}
+                      best_cpm: {type: integer, example: 550}
+                      avg_cpm: {type: number, example: 420.5}
+                      best_wpm: {type: integer, example: 110}
+                      avg_wpm: {type: number, example: 85.2}
+  500:
+    description: "서버 내부 오류"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "데이터 조회 중 오류가 발생했습니다."}

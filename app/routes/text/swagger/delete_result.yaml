@@ -1,0 +1,56 @@
+summary: "[삭제] 특정 연습 결과 단일 삭제 (유저 작성 결과값 1개 삭제)"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  1. 지문 ID(`text_id`), 유저 ID(`user_id`), 결과 ID(`result_id`)가 모두 일치하는 **단일 연습 기록**을 데이터베이스에서 영구 삭제합니다.
+  2. **활용 방안:** - **Locust 부하 테스트 후처리:** 테스트 과정에서 발생한 대량의 가짜 데이터를 즉시 삭제하여 DB 용량 확보 및 데이터 오염을 방지합니다.
+     - **기록 관리:** 유저가 자신의 특정 연습 기록을 삭제하고 싶을 때 정밀한 본인 인증(3종 ID 매칭) 후 삭제를 수행합니다.
+  3. **데이터 무결성:** 복합 식별자를 검증함으로써 다른 유저의 기록이나 다른 지문의 기록이 잘못 삭제되는 것을 원천 차단합니다.
+
+  **요청 URL 예시:**
+  - `DELETE /text/results/7/2/5`
+
+  **반환 데이터(Response Data) 의미:**
+  - 삭제 성공 시 별도의 `data` 객체 없이 성공 메시지와 상태 코드를 반환합니다.
+
+parameters:
+  - name: text_id
+    in: path
+    type: integer
+    required: true
+    description: "삭제할 기록이 속한 지문의 고유 ID"
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "삭제할 기록을 소유한 유저의 고유 ID"
+  - name: result_id
+    in: path
+    type: integer
+    required: true
+    description: "삭제하고자 하는 특정 결과 기록의 고유 ID"
+
+responses:
+  200:
+    description: "연습 기록 삭제 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "연습 기록이 성공적으로 삭제되었습니다."}
+  404:
+    description: "삭제할 기록을 찾을 수 없거나 ID 매칭 실패"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "삭제할 기록을 찾을 수 없습니다. (ID 불일치)"}
+  500:
+    description: "서버 내부 오류"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "삭제 처리 중 오류가 발생했습니다."}

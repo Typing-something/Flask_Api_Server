@@ -1,0 +1,63 @@
+summary: "유저가 찜한 글 목록(메타 정보) 조회"
+tags:
+  - User
+
+description: |
+  **기능 설명:**
+  1. 특정 유저(`user_id`)가 '찜(Favorite)' 처리한 모든 글의 상세 목록을 반환합니다.
+  2. **데이터 최적화:** 목록 조회 시에는 대용량 텍스트인 본문(`content`)을 제외하여 응답 속도를 높이고 전송량을 최소화했습니다.
+  3. **사용 사례:** 마이페이지 내 '내가 찜한 글' 탭 또는 즐겨찾기 목록 화면을 구성할 때 활용됩니다.
+
+  **요청 URL 예시:**
+  - `GET /text/favorite/10`
+
+  **반환 데이터(Response Data) 의미:**
+  - `id`: **글 ID** => 원본 글의 고유 번호입니다.
+  - `title`: **글 제목** => 찜한 글의 제목입니다.
+  - `author`: **작가** => 해당 글의 저자 또는 아티스트입니다.
+  - `genre`: **장르** => 글의 카테고리입니다.
+  - `image_url`: **이미지 URL** => S3에 저장된 글 관련 썸네일 이미지 주소입니다.
+
+parameters:
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "찜 목록을 조회할 유저의 고유 ID"
+
+responses:
+  200:
+    description: "찜한 글 목록 조회 성공"
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "총 3개의 찜한 글 목록을 성공적으로 가져왔습니다."
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 5
+              title:
+                type: string
+                example: "나의 사랑하는 공동체"
+              author:
+                type: string
+                example: "박노해"
+              genre:
+                type: string
+                example: "essay"
+              image_url:
+                type: string
+                example: "https://bucket.s3.region.amazonaws.com/texts/uuid.jpg"
+  404:
+    description: "유저를 찾을 수 없음"
+  500:
+    description: "서버 내부 오류"

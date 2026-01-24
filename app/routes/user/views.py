@@ -12,11 +12,13 @@ user_blueprint = Blueprint('user', __name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 GET_USER_PROFILE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_profile.yaml')
+GET_ALL_USER_PROFILE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_all_user_profile.yaml')
 GET_HISTORY_ALL_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_all.yaml')
 GET_HISTORY_RECENT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_recent.yaml')
 GET_HISTORY_GENRE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_history_genre.yaml')
 GET_USER_RANKING_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_ranking.yaml')
-GET_USER_FAVORITE_IDS_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_favorites_ids.yaml')
+GET_USER_FAVORITE_META_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_favorites_meta.yaml')
+
 # 1. 내 프로필 요약 정보
 @user_blueprint.route('/profile/<int:user_id>', methods=['GET'])
 @swag_from(GET_USER_PROFILE_YAML_PATH)
@@ -58,6 +60,47 @@ def get_user_profile(user_id):
         current_app.logger.error(f"❌ 프로필 조회 중 서버 에러: {str(e)}")
         return api_response(success=False, error_code=500, message="조회 중 오류가 발생했습니다.", status_code=500)
 
+# 랭킹 조회용
+@user_blueprint.route('/users', methods=['GET'])
+@swag_from(GET_ALL_USER_PROFILE_YAML_PATH)
+def get_all_users():
+    try:
+        # 1. 모든 유저 정보를 DB에서 가져옵니다.
+        users = User.query.all()
+
+        # 2. 질문자님이 작성하신 구조 그대로 리스트에 담습니다.
+        user_list = []
+        for user in users:
+            user_list.append({
+                "account": {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "profile_pic": user.profile_pic,
+                    "ranking_score": user.ranking_score  
+                },
+                "stats": {
+                    "play_count": user.play_count,
+                    "max_combo": user.max_combo,
+                    "avg_accuracy": user.avg_accuracy,
+                    "best_cpm": user.best_cpm,
+                    "avg_cpm": user.avg_cpm,
+                    "best_wpm": user.best_wpm,
+                    "avg_wpm": user.avg_wpm
+                }
+            })
+
+        current_app.logger.info(f" 데이터 누락 없이 총 {len(user_list)}명의 정보를 전송합니다.")
+
+        return api_response(
+            success=True, 
+            data={"users": user_list, "users_len" : len(user_list) }, 
+            message="모든 유저의 상세 데이터를 성공적으로 가져왔습니다."
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"❌ 전체 조회 중 서버 에러: {str(e)}")
+        return api_response(success=False, message="데이터 조회 중 오류가 발생했습니다.", status_code=500)
 # 2. 유저 연습 결과 조회 <All>
 @user_blueprint.route('/history/all/<int:user_id>', methods=['GET'])
 @swag_from(GET_HISTORY_ALL_YAML_PATH)
@@ -245,25 +288,39 @@ def get_user_ranking():
     
 
 # 6. 유저가 찜한 글 ID 목록 조회
-@user_blueprint.route('/favorites/ids/<int:user_id>', methods=['GET'])
-@swag_from(GET_USER_FAVORITE_IDS_YAML_PATH) # 나중에 YAML 연결
-def get_favorite_text_ids(user_id):
+@user_blueprint.route('/favorite/<int:user_id>', methods=['GET'])
+@swag_from(GET_USER_FAVORITE_META_YAML_PATH)
+def get_my_favorites(user_id):
+    """유저가 찜한 모든 글의 리스트를 반환합니다 (본문 제외)."""
     try:
         # 1. 유저 존재 여부 확인
         user = User.query.get(user_id)
         if not user:
-            return api_response(success=False, error_code=404, message="유저를 찾을 수 없습니다.", status_code=404)
+            return api_response(success=False, message="유저를 찾을 수 없습니다.", status_code=404)
 
-        favorite_ids = [text.id for text in user.favorite_texts]
+        # 2. 찜한 글 목록 가져오기 (Relationship 활용)
+        # lazy='dynamic' 설정이 되어 있으므로 .all()을 호출합니다.
+        fav_texts = user.favorite_texts.all()
 
-        current_app.logger.info(f" [찜ID조회] 유저 {user_id} - 총 {len(favorite_ids)}개의 찜한 글 ID 반환")
+        # 3. 데이터 가공 (content 제외)
+        fav_list = []
+        for t in fav_texts:
+            fav_list.append({
+                "id": t.id,
+                "genre": t.genre,
+                "title": t.title,
+                "author": t.author,
+                "image_url": t.image_url
+            })
+
+        current_app.logger.info(f"❤️ [찜목록조회] 유저 {user_id} - 총 {len(fav_list)}개의 찜한 글 반환")
 
         return api_response(
-            success=True,
-            data={"favorite_text_ids": favorite_ids},
-            message=f"유저가 찜한 글 ID {len(favorite_ids)}개를 성공적으로 가져왔습니다."
+            success=True, 
+            data=fav_list, 
+            message=f"총 {len(fav_list)}개의 찜한 글 목록을 성공적으로 가져왔습니다."
         )
 
     except Exception as e:
-        current_app.logger.error(f" 찜한 ID 조회 에러: {str(e)}")
-        return api_response(success=False, error_code=500, message="조회 중 서버 오류가 발생했습니다.", status_code=500)
+        current_app.logger.error(f"❌ 찜 목록 조회 중 오류: {str(e)}")
+        return api_response(success=False, message="목록을 불러오는 중 오류가 발생했습니다.", status_code=500)

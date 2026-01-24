@@ -1,0 +1,57 @@
+summary: "회원 탈퇴 및 관련 데이터 영구 삭제"
+tags:
+  - Auth
+
+description: |
+  **핵심 로직:**
+  1. 프론트엔드에서 전달받은 `Authorization` 헤더의 `id_token`을 Google API를 통해 검증합니다.
+  2. 보안을 위해 내부 서버 통신용 보안키(`X-INTERNAL-KEY`)를 체크합니다.
+  3. 토큰에서 추출한 `email`을 기반으로 DB에서 유저를 식별합니다.
+  4. **데이터 일괄 삭제:** 유저 삭제 시 DB의 `CASCADE` 설정에 의해 유저의 연습 기록(`TypingResult`) 및 찜 목록(`favorites`)이 자동으로 함께 삭제됩니다.
+
+  **사용 URL:**
+  - `DELETE /auth/user_out`
+
+parameters:
+  - name: X-INTERNAL-KEY
+    in: header
+    type: string
+    required: true
+    description: "내부 서버 동기화용 보안키"
+  - name: Authorization
+    in: header
+    type: string
+    required: true
+    description: "Bearer {Google_ID_Token} 형식으로 전달 (본인 인증용)"
+
+responses:
+  200:
+    description: "회원 탈퇴 및 데이터 삭제 성공"
+    schema:
+      type: object
+      properties:
+        success: 
+          type: boolean
+          example: true
+        message: 
+          type: string
+          example: "회원 탈퇴 및 모든 데이터 삭제가 완료되었습니다."
+        data:
+          type: "null"
+          example: null
+  401:
+    description: "인증 실패 (유효하지 않은 구글 토큰 또는 토큰 누락)"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "유효하지 않은 토큰입니다."}
+  404:
+    description: "유저를 찾을 수 없음"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string, example: "유저를 찾을 수 없습니다."}
+  500:
+    description: "서버 내부 오류"

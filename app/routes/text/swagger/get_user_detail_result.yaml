@@ -1,0 +1,73 @@
+summary: "[조회] 특정 연습 결과 단일 상세 조회 (정밀 검증)"
+tags:
+  - Text
+
+description: |
+  **기능 설명:**
+  1. 지문 ID(`text_id`), 유저 ID(`user_id`), 결과 ID(`result_id`)가 모두 일치하는 **단일 연습 기록**의 상세 스탯을 조회합니다.
+  2. **활용 방안:** 연습 결과 히스토리 목록에서 특정 항목을 클릭했을 때, 해당 연습에 대한 정밀 리포트(타수, 정확도, 콤보 등)를 보여주는 '상세 팝업'이나 '상세 페이지' 구성에 사용됩니다.
+  3. **보안 및 정합성:** 단순 ID 조회가 아닌 3종 식별자를 모두 검증함으로써, 리소스 간의 관계가 일치하는 데이터만 안전하게 반환합니다.
+
+  **요청 URL 예시:**
+  - `GET /text/results/7/2/5`
+
+  **반환 데이터(Response Data) 의미:**
+  - `result_id / text_id / user_id`: **검증된 대상 정보** => 요청과 일치하는 각 리소스의 고유 번호입니다.
+  - `stats`: **상세 지표 객체** => 해당 연습의 핵심 성과 데이터입니다.
+    - `cpm / wpm`: **타수 지표** => 당시 달성한 분당 타수와 단어수입니다.
+    - `accuracy`: **정확도** => 해당 연습의 최종 정확도(%) 수치입니다.
+    - `combo`: **최대 콤보** => 해당 연습에서 끊기지 않고 이어간 최대 타수입니다.
+    - `date`: **연습 일시** => 연습이 완료된 날짜와 시간입니다. (YYYY-MM-DD HH:mm:ss)
+
+parameters:
+  - name: text_id
+    in: path
+    type: integer
+    required: true
+    description: "연습을 수행한 지문의 고유 ID"
+  - name: user_id
+    in: path
+    type: integer
+    required: true
+    description: "연습을 수행한 유저의 고유 ID"
+  - name: result_id
+    in: path
+    type: integer
+    required: true
+    description: "조회할 특정 결과 기록의 고유 ID"
+
+responses:
+  200:
+    description: "연습 결과 상세 조회 성공"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: true}
+        message: {type: string, example: "연습 결과 상세 조회를 완료했습니다."}
+        data:
+          type: object
+          properties:
+            result_id: {type: integer, example: 5}
+            text_id: {type: integer, example: 7}
+            user_id: {type: integer, example: 2}
+            stats:
+              type: object
+              properties:
+                cpm: {type: integer, example: 450}
+                wpm: {type: integer, example: 90}
+                accuracy: {type: number, example: 98.5}
+                combo: {type: integer, example: 35}
+                date: {type: string, example: "2026-01-24 14:30:15"}
+  404:
+    description: "일치하는 연습 기록이 없거나 ID 매칭 실패"
+    schema:
+      type: object
+      properties:
+        success: {type: boolean, example: false}
+        error:
+          type: object
+          properties:
+            code: {type: integer, example: 404}
+            message: {type: string, example: "일치하는 연습 기록을 찾을 수 없습니다. (ID 불일치)"}
+  500:
+    description: "서버 내부 오류"

@@ -3,6 +3,8 @@ name: CI Test, Report and Deploy
 on:
   push:
     branches: [ "main" ] 
+  schedule:
+    - cron: '*/10 * * * *'
 
 jobs:
   test-and-deploy:
@@ -30,6 +32,7 @@ jobs:
         pytest --json-report --json-report-file=result.json
 
     - name: Deploy to EC2 via SSH
+      if: github.event_name == 'push'
       uses: appleboy/ssh-action@master
       with:
         host: "3.34.97.68"

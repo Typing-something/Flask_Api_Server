@@ -31,6 +31,11 @@ DELETE_TEXT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'delete_text.yaml')
 POST_RESULT_YAML_PATH =  os.path.join(BASE_DIR, 'swagger', 'save_result.yaml')
 GET_BEST_DATA_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_best_data.yaml')
 POST_FAVORITE_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'post_favorite_text.yaml')
+GET_USER_TEXT_RESULT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_text_result.yaml')
+GET_RESULT_DETAIL_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_detail_result.yaml')
+DELETE_RESULT_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'delete_result.yaml')
+
+
 # 0. 글쓰기 페이지 (HTML 폼 제공 및 저장 - 이미지 업로드 기능 추가)
 @text_blueprint.route('/add', methods=['GET', 'POST'])
 @swag_from(ADD_TEXT_YAML_PATH)
@@ -340,7 +345,7 @@ def delete_text(text_id):
             status_code=500
         )
 
-# 5. 타자 결과 저장
+# 5. 타자 결과 저장 및 실시간 랭킹 점수 갱신
 @text_blueprint.route('/results', methods=['POST'])
 @swag_from(POST_RESULT_YAML_PATH)
 def save_typing_result():
@@ -390,12 +395,12 @@ def save_typing_result():
             user.play_count += 1
             new_count = user.play_count
 
-            # --- [핵심] 평균값들 갱신 (누적 평균 공식) ---
+            # --- 평균값들 갱신 ---
             user.avg_accuracy = round(((user.avg_accuracy * old_count) + current_accuracy) / new_count, 2)
             user.avg_cpm = round(((user.avg_cpm * old_count) + current_cpm) / new_count, 2)
             user.avg_wpm = round(((user.avg_wpm * old_count) + current_wpm) / new_count, 2)
 
-            # --- [핵심] 최고 기록들 갱신 (Max 체크) ---
+            # --- 최고 기록들 갱신 ---
             if current_combo > user.max_combo:
                 user.max_combo = current_combo
                 is_new_combo_record = True
@@ -406,26 +411,29 @@ def save_typing_result():
             if current_wpm > user.best_wpm:
                 user.best_wpm = current_wpm
 
+            # ✅ [핵심 추가] 모든 통계가 업데이트된 후 랭킹 점수 계산 함수 호출
+            # 이 코드가 있어야 DB의 ranking_score 컬럼이 최신화됩니다.
+            user.update_ranking_score()
+
         else:
             return api_response(success=False, error_code=404, message="유저를 찾을 수 없습니다.", status_code=404)
 
-        # 4. 최종 DB 반영
+        # 4. 최종 DB 반영 (연습 결과 + 업데이트된 유저 정보 및 점수)
         db.session.commit()
+
+        current_app.logger.info(f"🏆 유저 {user.username} 결과 저장 및 랭킹 점수({user.ranking_score}) 갱신 완료")
 
         return api_response(
             success=True, 
             data={
                 "result_id": new_result.id, 
                 "play_count": user.play_count,
+                "ranking_score": user.ranking_score, # 응답에 점수 포함
                 "avg_accuracy": user.avg_accuracy,
                 "best_cpm": user.best_cpm,
-                "avg_cpm": user.avg_cpm,
-                "best_wpm": user.best_wpm,
-                "avg_wpm": user.avg_wpm,
-                "max_combo": user.max_combo,
                 "is_new_record": is_new_combo_record 
             }, 
-            message="연습 결과 저장 및 통계 갱신 완료",
+            message="연습 결과 저장 및 랭킹 업데이트 성공",
             status_code=201
         )
 
@@ -531,3 +539,128 @@ def toggle_favorite():
         db.session.rollback()
         current_app.logger.error(f"❌ 찜하기 에러: {str(e)}")
         return api_response(success=False, message="처리 중 오류가 발생했습니다.", status_code=500)
+
+# 8. 특정 글에 대한 나의 최근 연습 기록 조회
+@text_blueprint.route('/<int:text_id>/history/<int:user_id>', methods=['GET'])
+@swag_from(GET_USER_TEXT_RESULT_YAML_PATH)
+def get_text_history(text_id, user_id):
+    """특정 지문에 대해 특정 유저가 연습한 최근 기록들을 가져옵니다."""
+    try:
+        # 1. 파라미터 확인 (기본 5개)
+        limit_val = request.args.get('limit', default=5, type=int)
+
+        # 2. DB 조회: 해당 유저와 해당 텍스트가 일치하는 기록만 최신순 정렬
+        results = TypingResult.query.filter_by(user_id=user_id, text_id=text_id)\
+                       .order_by(TypingResult.created_at.desc())\
+                       .limit(limit_val).all()
+        
+        # 3. 데이터 가공
+        history_list = []
+        for r in results:
+            history_list.append({
+                "result_id": r.id,
+                "cpm": r.cpm,
+                "wpm": r.wpm,
+                "accuracy": r.accuracy,
+                "combo": r.combo,
+                "date": r.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+
+        current_app.logger.info(f"유저 {user_id} - 글 ID {text_id}의 최근 {len(history_list)}개 기록 조회")
+
+        return api_response(
+            success=True, 
+            data={
+                "text_id": text_id,
+                "user_id": user_id,
+                "history": history_list
+            }, 
+            message="해당 지문의 연습 이력을 성공적으로 불러왔습니다."
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"❌ 지문별 이력 조회 오류: {str(e)}")
+        return api_response(success=False, message="이력을 불러오는 중 오류가 발생했습니다.", status_code=500)
+    
+
+# 9. 특정 연습 결과 정밀 조회 (지문 + 유저 + 결과 ID 매칭)
+@text_blueprint.route('/results/<int:text_id>/<int:user_id>/<int:result_id>', methods=['GET'])
+@swag_from(GET_RESULT_DETAIL_YAML_PATH) # 나중에 YAML 추가 시 연결
+def get_specific_result(text_id, user_id, result_id):
+    """지문, 유저, 결과 ID가 모두 일치하는 단일 기록의 상세 정보를 반환합니다."""
+    try:
+        # 1. 3가지 ID를 모두 만족하는 기록 조회 (데이터 무결성 검증)
+        result = TypingResult.query.filter_by(
+            id=result_id, 
+            user_id=user_id, 
+            text_id=text_id
+        ).first()
+
+        if not result:
+            return api_response(
+                success=False, 
+                message="일치하는 연습 기록을 찾을 수 없습니다. (ID 불일치)", 
+                status_code=404
+            )
+
+        # 2. 결과 가공
+        data = {
+            "result_id": result.id,
+            "text_id": result.text_id,
+            "user_id": result.user_id,
+            "stats": {
+                "cpm": result.cpm,
+                "wpm": result.wpm,
+                "accuracy": result.accuracy,
+                "combo": result.combo,
+                "date": result.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        }
+
+        current_app.logger.info(f"🎯 [결과상세] 기록 ID {result_id} 조회 성공")
+
+        return api_response(
+            success=True, 
+            data=data, 
+            message="연습 결과 상세 조회를 완료했습니다."
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"❌ 결과 상세 조회 에러: {str(e)}")
+        return api_response(success=False, message="데이터를 불러오지 못했습니다.", status_code=500)
+
+# 10. 특정 연습 결과 삭제 (Locust 클린업 및 관리용)
+@text_blueprint.route('/results/<int:text_id>/<int:user_id>/<int:result_id>', methods=['DELETE'])
+@swag_from(DELETE_RESULT_YAML_PATH) # 필요 시 YAML 연결
+def delete_specific_result(text_id, user_id, result_id):
+    """지문, 유저, 결과 ID가 모두 일치하는 단일 기록을 삭제합니다."""
+    try:
+        # 1. 3가지 ID를 모두 만족하는 기록 조회
+        result = TypingResult.query.filter_by(
+            id=result_id, 
+            user_id=user_id, 
+            text_id=text_id
+        ).first()
+
+        if not result:
+            return api_response(
+                success=False, 
+                message="삭제할 기록을 찾을 수 없습니다. (ID 불일치)", 
+                status_code=404
+            )
+
+        # 2. 삭제 수행
+        db.session.delete(result)
+        db.session.commit()
+
+        current_app.logger.info(f"🗑️ [결과삭제] 유저 {user_id}의 기록 {result_id} 삭제 완료 (Locust Cleanup)")
+
+        return api_response(
+            success=True, 
+            message="연습 기록이 성공적으로 삭제되었습니다."
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"❌ 결과 삭제 에러: {str(e)}")
+        return api_response(success=False, message="삭제 처리 중 오류가 발생했습니다.", status_code=500)
