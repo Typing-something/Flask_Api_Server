@@ -45,7 +45,9 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt
           flask db upgrade
-          pm2 restart typing-server
+          sudo fuser -k 5000/tcp || true
+          pm2 delete typing-server || true
+          pm2 start "python run.py" --name typing-server --update-env
 
     - name: Post-deployment Load Test & Report
       env:
