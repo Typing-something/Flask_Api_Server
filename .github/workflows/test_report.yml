@@ -3,8 +3,6 @@ name: CI Test, Report and Deploy
 on:
   push:
     branches: [ "main" ] 
-  schedule:
-    - cron: '*/10 * * * *'
 
 jobs:
   test-and-deploy:
@@ -25,9 +23,12 @@ jobs:
         pip install -r requirements.txt
         pip install pytest-json-report locust requests
 
+
     - name: Pre-deployment Check (Pytest)
       env:
         PYTHONPATH: .
+        DATABASE_URL: "sqlite:///:memory:"
+        FLASK_ENV: testing
       run: |
         pytest --json-report --json-report-file=result.json
 
