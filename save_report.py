@@ -9,13 +9,15 @@ def get_git_info():
 
 def run_commands():
     target_host = os.getenv("TARGET_HOST", "http://localhost:5000")
+    print(f"🎬 [DEBUG] 테스트 및 부하 측정 시작 (목적지: {target_host})")
     
+    # 1. Pytest 실행 (결과 파일이 없을 때만 실행)
     if not os.path.exists("result.json"):
         print(f"🧪 1. Pytest 실행 중...")
-        subprocess.run(["pytest", "--json-report", "--json-report-file=result.json"])
+        subprocess.run(["pytest", "--json-report", "--json-report-file=result.json"], check=True)
     
-    print(f"🚀 2. Locust 부하 테스트 실행 중 (목적지: {target_host})...")
-    # 💡 런타임과 유저 수를 상황에 맞게 조절하세요 (예: 5m, -u 50)
+    # 2. Locust 부하 테스트 실행
+    print(f"🚀 2. Locust 부하 테스트 실행 중...")
     subprocess.run([
         "locust", 
         "-f", "tests/load/locustfile.py",
@@ -25,27 +27,26 @@ def run_commands():
         "--run-time", "1m", 
         "--csv", "perf",
         "--host", target_host
-    ])
+    ], check=True)
 
 def send_combined_report():
+    print("📡 [DEBUG] 리포트 데이터 취합 및 전송 준비 중...")
     git_hash = get_git_info()
     
     if not os.path.exists("result.json"):
-        print("❌ result.json 파일을 찾을 수 없습니다.")
+        print("❌ [ERROR] result.json 파일을 찾을 수 없어 전송을 중단합니다.")
         return
 
     with open("result.json", "r", encoding="utf-8") as f:
         test_data = json.load(f)
     
     perf_results = []
-    # Locust CSV 파일명은 --csv 옵션값 뒤에 _stats.csv가 붙습니다.
     if os.path.exists("perf_stats.csv"):
         with open("perf_stats.csv", "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row['Name'] != 'Aggregated':
                     try:
-                        # 💡 관리자 대시보드용 정밀 데이터 추출
                         total_req = int(row.get('Request Count', 0) or 0)
                         fail_count = int(row.get('Failure Count', 0) or 0)
                         
@@ -53,8 +54,8 @@ def send_combined_report():
                             "method": row['Type'],
                             "endpoint": row['Name'],
                             "avg_latency": float(row.get('Average Response Time', 0) or 0),
-                            "p95_latency": float(row.get('95%', 0) or 0),     # 상위 5% 지표
-                            "p99_latency": float(row.get('99%', 0) or 0),     # 상위 1% 지표
+                            "p95_latency": float(row.get('95%', 0) or 0),
+                            "p99_latency": float(row.get('99%', 0) or 0),
                             "max_latency": float(row.get('Max Response Time', 0) or 0),
                             "rps": float(row.get('Requests/s', 0) or 0),
                             "total_requests": total_req,
@@ -70,7 +71,7 @@ def send_combined_report():
         "total": test_data.get("summary", {}).get("total", 0),
         "passed": test_data.get("summary", {}).get("passed", 0),
         "failed": test_data.get("summary", {}).get("failed", 0),
-        "user_count": 50, # 실행 시 설정한 유저 수
+        "user_count": 50,
         "pytest_results": [
             {
                 "test_name": t['nodeid'].split("::")[-1],
@@ -83,11 +84,31 @@ def send_combined_report():
 
     base_url = os.getenv("SERVER_URL", "http://localhost:5000")
     target_url = f"{base_url}/admin/report"
+    print(f"📤 [DEBUG] 전송 목적지: {target_url}")
     
     try:
-        response = requests.post(target_url, json=payload)
+        response = requests.post(target_url, json=payload, timeout=20)
         print(f"✅ 리포트 전송 결과: {response.status_code}")
+        print(f"📝 서버 응답: {response.text}")
     except Exception as e:
         print(f"❌ 서버 전송 실패: {e}")
 
-# (이하 cleanup_files 및 main은 동일)
+def cleanup_files():
+    print("🧹 [DEBUG] 임시 결과 파일 정리 중...")
+    for f in glob.glob("perf_*"):
+        try: os.remove(f)
+        except: pass
+    if os.path.exists("result.json"):
+        try: os.remove("result.json")
+        except: pass
+
+# 🔥 가장 중요한 실행문 블록!
+if __name__ == "__main__":
+    print("🏁 스크립트 가동 시작")
+    try:
+        run_commands()           # 1. 테스트 실행 및 파일 생성
+        send_combined_report()    # 2. 결과 전송
+        cleanup_files()           # 3. 정리
+        print("✅ 모든 작업 완료")
+    except Exception as e:
+        print(f"🧨 [FATAL] 실행 중 치명적 오류 발생: {e}")
