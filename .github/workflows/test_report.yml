@@ -23,7 +23,6 @@ jobs:
         pip install -r requirements.txt
         pip install pytest-json-report locust requests
 
-
     - name: Pre-deployment Check (Pytest)
       env:
         PYTHONPATH: .
@@ -70,4 +69,8 @@ jobs:
         PORT: 5000
         PYTHONPATH: .
       run: |
-        python save_report.py
+        python save_report.py > debug.log 2>&1 || true
+        echo "=== DEBUG LOG START ==="
+        cat debug.log
+        echo "=== DEBUG LOG END ==="
+        if grep -q "Error" debug.log; then exit 1; fi
