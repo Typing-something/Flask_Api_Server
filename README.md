@@ -275,6 +275,10 @@ gunicorn -w 4 -b 0.0.0.0:5000 "run:app"
 ### TestReport / TestCaseResult / ApiPerformance
 - 테스트 리포트 및 API 성능 모니터링 데이터
 
+### 데이터베이스 스키마
+
+![Database Schema](images/database_schema.png)
+
 ## 📝 라이선스
 
 이 프로젝트는 학습 목적으로 제작되었습니다.
