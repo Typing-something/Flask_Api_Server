@@ -7,7 +7,9 @@ class TypingFullCircuitTest(HttpUser):
 
     def on_start(self):
         # 부하테스트용 유저 ID (환경 변수 또는 기본값)
-        self.user_id = int(os.getenv('LOCUST_TEST_USER_ID', 3))
+        # 환경 변수가 비어있거나 없으면 기본값 3 사용
+        test_user_id = os.getenv('LOCUST_TEST_USER_ID', '3').strip()
+        self.user_id = int(test_user_id) if test_user_id else 3
         self.target_text_id = None
         self.target_result_id = None
         self.created_result_ids = []  # 생성한 결과 ID 추적
