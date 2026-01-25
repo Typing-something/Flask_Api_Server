@@ -8,6 +8,7 @@ from datetime import datetime
 from app.utils import api_response
 from sqlalchemy import func
 from flasgger import swag_from
+from .helpers import validate_result_data, update_user_statistics
 
 # S3 클라이언트 설정 (환경변수 로드)
 s3 = boto3.client('s3',
@@ -351,74 +352,38 @@ def delete_text(text_id):
 def save_typing_result():
     try:
         data = request.get_json()
-        is_new_combo_record = False
         
-        # 1. 필수 데이터 검증
-        if not data:
-            return api_response(success=False, error_code=400, message="전송된 데이터가 없습니다.", status_code=400)
+        # 1. 데이터 검증
+        is_valid, error_message, parsed_data = validate_result_data(data)
+        if not is_valid:
+            return api_response(success=False, error_code=400, message=error_message, status_code=400)
         
-        required_fields = ['text_id', 'user_id', 'cpm', 'accuracy', 'combo']
-        for field in required_fields:
-            if data.get(field) is None:
-                return api_response(success=False, error_code=400, message=f"{field} 항목은 필수입니다.", status_code=400)
-
-        # 수치 변수화
-        current_cpm = int(data.get('cpm'))
-        current_wpm = int(data.get('wpm', 0))
-        current_accuracy = float(data.get('accuracy'))
-        current_combo = int(data.get('combo'))
-
         # 2. 결과 기록(TypingResult) 객체 생성
         new_result = TypingResult(
-            user_id=data.get('user_id'),
-            text_id=data.get('text_id'),
-            cpm=current_cpm,
-            wpm=current_wpm,
-            accuracy=current_accuracy,
-            combo=current_combo
+            user_id=parsed_data['user_id'],
+            text_id=parsed_data['text_id'],
+            cpm=parsed_data['cpm'],
+            wpm=parsed_data['wpm'],
+            accuracy=parsed_data['accuracy'],
+            combo=parsed_data['combo']
         )
         db.session.add(new_result)
 
-        # 3. 유저 통계 업데이트
-        user = User.query.get(data.get('user_id'))
-        if user:
-            # 기본값 방어 코드 (None 방지)
-            user.play_count = user.play_count or 0
-            user.avg_accuracy = user.avg_accuracy or 0.0
-            user.max_combo = user.max_combo or 0
-            user.best_cpm = user.best_cpm or 0
-            user.avg_cpm = user.avg_cpm or 0.0
-            user.best_wpm = user.best_wpm or 0
-            user.avg_wpm = user.avg_wpm or 0.0
-
-            old_count = user.play_count
-            user.play_count += 1
-            new_count = user.play_count
-
-            # --- 평균값들 갱신 ---
-            user.avg_accuracy = round(((user.avg_accuracy * old_count) + current_accuracy) / new_count, 2)
-            user.avg_cpm = round(((user.avg_cpm * old_count) + current_cpm) / new_count, 2)
-            user.avg_wpm = round(((user.avg_wpm * old_count) + current_wpm) / new_count, 2)
-
-            # --- 최고 기록들 갱신 ---
-            if current_combo > user.max_combo:
-                user.max_combo = current_combo
-                is_new_combo_record = True
-            
-            if current_cpm > user.best_cpm:
-                user.best_cpm = current_cpm
-            
-            if current_wpm > user.best_wpm:
-                user.best_wpm = current_wpm
-
-            # ✅ [핵심 추가] 모든 통계가 업데이트된 후 랭킹 점수 계산 함수 호출
-            # 이 코드가 있어야 DB의 ranking_score 컬럼이 최신화됩니다.
-            user.update_ranking_score()
-
-        else:
+        # 3. 유저 조회 및 통계 업데이트
+        user = User.query.get(parsed_data['user_id'])
+        if not user:
             return api_response(success=False, error_code=404, message="유저를 찾을 수 없습니다.", status_code=404)
+        
+        # 통계 업데이트
+        update_result = update_user_statistics(
+            user,
+            parsed_data['cpm'],
+            parsed_data['wpm'],
+            parsed_data['accuracy'],
+            parsed_data['combo']
+        )
 
-        # 4. 최종 DB 반영 (연습 결과 + 업데이트된 유저 정보 및 점수)
+        # 4. 최종 DB 반영
         db.session.commit()
 
         current_app.logger.info(f"🏆 유저 {user.username} 결과 저장 및 랭킹 점수({user.ranking_score}) 갱신 완료")
@@ -428,10 +393,10 @@ def save_typing_result():
             data={
                 "result_id": new_result.id, 
                 "play_count": user.play_count,
-                "ranking_score": user.ranking_score, # 응답에 점수 포함
+                "ranking_score": user.ranking_score,
                 "avg_accuracy": user.avg_accuracy,
                 "best_cpm": user.best_cpm,
-                "is_new_record": is_new_combo_record 
+                "is_new_record": update_result['is_new_combo_record']
             }, 
             message="연습 결과 저장 및 랭킹 업데이트 성공",
             status_code=201
