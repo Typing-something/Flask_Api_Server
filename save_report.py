@@ -1,4 +1,4 @@
-import json, requests, os, subprocess, csv, glob
+import json, requests, os, subprocess, csv, glob, time
 
 def get_git_info():
     try:
@@ -6,6 +6,26 @@ def get_git_info():
         return rev
     except:
         return "unknown"
+
+def check_server_health(target_host, max_retries=10, retry_delay=3):
+    """서버가 준비될 때까지 대기"""
+    
+    print(f"🏥 서버 헬스 체크 시작: {target_host}")
+    
+    for i in range(max_retries):
+        try:
+            # 간단한 엔드포인트로 서버 확인
+            response = requests.get(f"{target_host}/text/all", timeout=5)
+            if response.status_code == 200:
+                print(f"✅ 서버 준비 완료! ({i+1}번째 시도)")
+                return True
+        except Exception as e:
+            print(f"⏳ 서버 대기 중... ({i+1}/{max_retries}) - {str(e)[:50]}")
+            if i < max_retries - 1:
+                time.sleep(retry_delay)
+    
+    print(f"❌ 서버가 {max_retries * retry_delay}초 내에 응답하지 않았습니다.")
+    return False
 
 def run_commands():
     target_host = os.getenv("TARGET_HOST", "http://localhost:5000")
@@ -15,6 +35,10 @@ def run_commands():
     if not os.path.exists("result.json"):
         print(f"🧪 1. Pytest 실행 중...")
         subprocess.run(["pytest", "--json-report", "--json-report-file=result.json"], check=True)
+    
+    # 1.5. 서버 헬스 체크 (부하테스트 전에 서버가 준비되었는지 확인)
+    if not check_server_health(target_host):
+        print("⚠️ 서버가 준비되지 않았지만 부하테스트를 계속 진행합니다...")
     
     # 2. Locust 부하 테스트 실행
     print(f"🚀 2. Locust 부하 테스트 실행 중...")
