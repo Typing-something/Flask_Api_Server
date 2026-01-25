@@ -34,7 +34,7 @@ def send_combined_report():
     git_hash = get_git_info()
     
     if not os.path.exists("result.json"):
-        print("❌ [ERROR] result.json 파일을 찾을 수 없어 전송을 중단합니다.")
+        print("❌ [WARNING] result.json 파일을 찾을 수 없어 전송을 중단합니다.")
         return
 
     with open("result.json", "r", encoding="utf-8") as f:

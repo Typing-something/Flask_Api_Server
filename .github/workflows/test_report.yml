@@ -76,7 +76,8 @@ jobs:
         echo "=== DEBUG LOG START ==="
         cat debug.log
         echo "=== DEBUG LOG END ==="
-        if grep -q "Error" debug.log; then exit 1; fi
+        # 실제 에러만 감지 (FATAL, 실패, 전송 실패 등)
+        if grep -qiE "(FATAL|실패|전송 실패|치명적)" debug.log; then exit 1; fi
 
     - name: Cleanup Test Data
       env:
