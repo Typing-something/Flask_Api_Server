@@ -5,7 +5,7 @@ Flask 기반 타이핑 게임 백엔드 API 서버입니다. 사용자 인증, �
 ## 🔗 관련 링크
 
 - [🎨 웹 연결](https://typing-something-fe.vercel.app/)
-- [🌐 API 명세서](http://3.34.97.68:5000/apidocs/)
+- [🌐 API 명세서](http://3.34.97.68:5000/apidocs/)gi
 
 ## 🎯 주요 기능
 
