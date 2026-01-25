@@ -56,9 +56,9 @@ def run_commands():
     # Locust 실행 결과 확인
     print(f"📊 Locust 실행 완료 (exit code: {result.returncode})")
     if result.stdout:
-        print(f"📝 Locust 출력:\n{result.stdout[-500:]}")  # 마지막 500자만 출력
+        print(f"📝 Locust stdout 전체:\n{result.stdout}")
     if result.stderr:
-        print(f"⚠️ Locust 에러:\n{result.stderr[-500:]}")
+        print(f"⚠️ Locust stderr:\n{result.stderr}")
     
     # 생성된 CSV 파일 확인
     import glob
