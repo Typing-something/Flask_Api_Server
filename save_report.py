@@ -18,16 +18,32 @@ def run_commands():
     
     # 2. Locust 부하 테스트 실행
     print(f"🚀 2. Locust 부하 테스트 실행 중...")
-    subprocess.run([
+    result = subprocess.run([
         "locust", 
         "-f", "tests/load/locustfile.py",
         "--headless", 
         "-u", "50", 
         "-r", "5", 
-        "--run-time", "10", 
+        "--run-time", "30s",  # 30초로 증가 (10초는 너무 짧음)
         "--csv", "perf",
         "--host", target_host
-    ], check=True)
+    ], check=True, capture_output=True, text=True)
+    
+    # Locust 실행 결과 확인
+    print(f"📊 Locust 실행 완료 (exit code: {result.returncode})")
+    if result.stdout:
+        print(f"📝 Locust 출력:\n{result.stdout[-500:]}")  # 마지막 500자만 출력
+    if result.stderr:
+        print(f"⚠️ Locust 에러:\n{result.stderr[-500:]}")
+    
+    # 생성된 CSV 파일 확인
+    import glob
+    csv_files = glob.glob("perf_*.csv")
+    print(f"📁 생성된 CSV 파일: {csv_files}")
+    for csv_file in csv_files:
+        if os.path.exists(csv_file):
+            size = os.path.getsize(csv_file)
+            print(f"   - {csv_file}: {size} bytes")
 
 def send_combined_report():
     print("📡 [DEBUG] 리포트 데이터 취합 및 전송 준비 중...")
@@ -41,17 +57,31 @@ def send_combined_report():
         test_data = json.load(f)
     
     perf_results = []
-    if os.path.exists("perf_stats.csv"):
-        with open("perf_stats.csv", "r", encoding="utf-8") as f:
+    csv_file_path = "perf_stats.csv"
+    
+    print(f"🔍 CSV 파일 확인: {csv_file_path}")
+    if os.path.exists(csv_file_path):
+        file_size = os.path.getsize(csv_file_path)
+        print(f"✅ CSV 파일 존재: {file_size} bytes")
+        
+        with open(csv_file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            print(f"📄 CSV 파일 내용 (처음 500자):\n{content[:500]}")
+            
+            f.seek(0)  # 파일 포인터 리셋
             reader = csv.DictReader(f)
-            for row in reader:
-                if row['Name'] != 'Aggregated':
+            rows = list(reader)
+            print(f"📊 CSV 행 수: {len(rows)}")
+            
+            for row in rows:
+                print(f"   - 행 데이터: {dict(row)}")
+                if row.get('Name') and row['Name'] != 'Aggregated':
                     try:
                         total_req = int(row.get('Request Count', 0) or 0)
                         fail_count = int(row.get('Failure Count', 0) or 0)
                         
                         perf_results.append({
-                            "method": row['Type'],
+                            "method": row.get('Type', 'GET'),
                             "endpoint": row['Name'],
                             "avg_latency": float(row.get('Average Response Time', 0) or 0),
                             "p95_latency": float(row.get('95%', 0) or 0),
@@ -63,8 +93,16 @@ def send_combined_report():
                             "error_rate": round((fail_count / total_req * 100), 2) if total_req > 0 else 0
                         })
                     except (ValueError, KeyError) as e:
-                        print(f"⚠️ CSV 파싱 중 건너뜀: {e}")
+                        print(f"⚠️ CSV 파싱 중 건너뜀: {e}, 행: {row}")
                         continue
+    else:
+        print(f"❌ CSV 파일이 존재하지 않습니다: {csv_file_path}")
+        # 다른 가능한 파일명 확인
+        import glob
+        all_csv = glob.glob("perf*.csv")
+        print(f"🔍 다른 CSV 파일들: {all_csv}")
+    
+    print(f"📈 수집된 성능 데이터: {len(perf_results)}개")
 
     payload = {
         "git_commit": git_hash,
