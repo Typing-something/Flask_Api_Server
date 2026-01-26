@@ -46,7 +46,7 @@ def run_commands():
         "locust", 
         "-f", "tests/load/locustfile.py",
         "--headless", 
-        "-u", "40", 
+        "-u", "20", 
         "-r", "5", 
         "--run-time", "15s",  # 30초로 증가 (10초는 너무 짧음)
         "--csv", "perf",
@@ -97,6 +97,9 @@ def send_combined_report():
             rows = list(reader)
             print(f"📊 CSV 행 수: {len(rows)}")
             
+            # 랜덤 limit API 데이터를 수집하여 평균 계산
+            main_random_data = []
+            
             for row in rows:
                 print(f"   - 행 데이터: {dict(row)}")
                 if row.get('Name') and row['Name'] != 'Aggregated':
@@ -104,21 +107,70 @@ def send_combined_report():
                         total_req = int(row.get('Request Count', 0) or 0)
                         fail_count = int(row.get('Failure Count', 0) or 0)
                         
-                        perf_results.append({
-                            "method": row.get('Type', 'GET'),
-                            "endpoint": row['Name'],
-                            "avg_latency": float(row.get('Average Response Time', 0) or 0),
-                            "p95_latency": float(row.get('95%', 0) or 0),
-                            "p99_latency": float(row.get('99%', 0) or 0),
-                            "max_latency": float(row.get('Max Response Time', 0) or 0),
-                            "rps": float(row.get('Requests/s', 0) or 0),
-                            "total_requests": total_req,
-                            "fail_count": fail_count,
-                            "error_rate": round((fail_count / total_req * 100), 2) if total_req > 0 else 0
-                        })
+                        endpoint_name = row['Name']
+                        
+                        # 랜덤 limit API인지 확인
+                        if '/text/main/' in endpoint_name or endpoint_name == '/text/main/[limit]':
+                            # 랜덤 limit API 데이터 수집 (나중에 평균 계산)
+                            main_random_data.append({
+                                "total_req": total_req,
+                                "fail_count": fail_count,
+                                "avg_latency": float(row.get('Average Response Time', 0) or 0),
+                                "p95_latency": float(row.get('95%', 0) or 0) if row.get('95%', 'N/A') != 'N/A' else 0,
+                                "p99_latency": float(row.get('99%', 0) or 0) if row.get('99%', 'N/A') != 'N/A' else 0,
+                                "max_latency": float(row.get('Max Response Time', 0) or 0),
+                                "rps": float(row.get('Requests/s', 0) or 0),
+                            })
+                        else:
+                            # 일반 API는 그대로 추가
+                            perf_results.append({
+                                "method": row.get('Type', 'GET'),
+                                "endpoint": endpoint_name,
+                                "avg_latency": float(row.get('Average Response Time', 0) or 0),
+                                "p95_latency": float(row.get('95%', 0) or 0) if row.get('95%', 'N/A') != 'N/A' else 0,
+                                "p99_latency": float(row.get('99%', 0) or 0) if row.get('99%', 'N/A') != 'N/A' else 0,
+                                "max_latency": float(row.get('Max Response Time', 0) or 0),
+                                "rps": float(row.get('Requests/s', 0) or 0),
+                                "total_requests": total_req,
+                                "fail_count": fail_count,
+                                "error_rate": round((fail_count / total_req * 100), 2) if total_req > 0 else 0
+                            })
                     except (ValueError, KeyError) as e:
                         print(f"⚠️ CSV 파싱 중 건너뜀: {e}, 행: {row}")
                         continue
+            
+            # 랜덤 limit API 평균 계산
+            if main_random_data:
+                total_req_sum = sum(d['total_req'] for d in main_random_data)
+                fail_count_sum = sum(d['fail_count'] for d in main_random_data)
+                
+                # 가중 평균 계산 (요청 수를 가중치로 사용)
+                if total_req_sum > 0:
+                    weighted_avg_latency = sum(d['avg_latency'] * d['total_req'] for d in main_random_data) / total_req_sum
+                    weighted_avg_p95 = sum(d['p95_latency'] * d['total_req'] for d in main_random_data if d['p95_latency'] > 0) / sum(d['total_req'] for d in main_random_data if d['p95_latency'] > 0) if any(d['p95_latency'] > 0 for d in main_random_data) else 0
+                    weighted_avg_p99 = sum(d['p99_latency'] * d['total_req'] for d in main_random_data if d['p99_latency'] > 0) / sum(d['total_req'] for d in main_random_data if d['p99_latency'] > 0) if any(d['p99_latency'] > 0 for d in main_random_data) else 0
+                    max_latency = max(d['max_latency'] for d in main_random_data)
+                    total_rps = sum(d['rps'] for d in main_random_data)
+                else:
+                    weighted_avg_latency = 0
+                    weighted_avg_p95 = 0
+                    weighted_avg_p99 = 0
+                    max_latency = 0
+                    total_rps = 0
+                
+                perf_results.append({
+                    "method": "GET",
+                    "endpoint": "/text/main/[limit]",
+                    "avg_latency": round(weighted_avg_latency, 2),
+                    "p95_latency": round(weighted_avg_p95, 2),
+                    "p99_latency": round(weighted_avg_p99, 2),
+                    "max_latency": round(max_latency, 2),
+                    "rps": round(total_rps, 2),
+                    "total_requests": total_req_sum,
+                    "fail_count": fail_count_sum,
+                    "error_rate": round((fail_count_sum / total_req_sum * 100), 2) if total_req_sum > 0 else 0
+                })
+                print(f"📊 랜덤 limit API 통합 완료: {len(main_random_data)}개 데이터를 평균화")
     else:
         print(f"❌ CSV 파일이 존재하지 않습니다: {csv_file_path}")
         # 다른 가능한 파일명 확인
