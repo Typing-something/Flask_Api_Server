@@ -32,7 +32,46 @@ jobs:
       run: |
         pytest --json-report --json-report-file=result.json
 
-    - name: Load Test & Report
+    - name: Run Load Test on EC2 (localhost)
+      uses: appleboy/ssh-action@master
+      with:
+        host: "3.34.97.68"
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/Flask_Api_Server
+          source venv/bin/activate
+          
+          # Locust 실행 (localhost로 요청)
+          echo "🚀 EC2 내부에서 Locust 부하 테스트 시작 (localhost:5000)"
+          locust -f tests/load/locustfile.py \
+            --headless \
+            -u 50 \
+            -r 10 \
+            --run-time 30s \
+            --csv /tmp/perf \
+            --host http://localhost:5000 || true
+          
+          # 결과 파일을 특정 위치에 저장
+          if [ -f /tmp/perf_stats.csv ]; then
+            mv /tmp/perf_stats.csv /tmp/locust_results.csv
+            echo "✅ Locust 결과 파일 생성 완료: /tmp/locust_results.csv"
+          else
+            echo "⚠️ Locust 결과 파일이 생성되지 않았습니다."
+            ls -la /tmp/perf* || true
+          fi
+
+    - name: Download Locust Results from EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: "3.34.97.68"
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "/tmp/locust_results.csv"
+        target: "./perf_stats.csv"
+        fail_on_error: false
+
+    - name: Send Combined Report
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -43,13 +82,11 @@ jobs:
         INTERNAL_SYNC_KEY: ${{ secrets.INTERNAL_SYNC_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         SERVER_URL: ${{ secrets.SERVER_URL }}
-        TARGET_HOST: ${{ secrets.TARGET_HOST }}
         LOCUST_TEST_USER_ID: ${{ secrets.LOCUST_TEST_USER_ID }}
         FLASK_ENV: production
-        PORT: 5000
         PYTHONPATH: .
       run: |
-        python save_report.py > debug.log 2>&1 || true
+        python -c "from save_report import send_combined_report; send_combined_report()" > debug.log 2>&1 || true
         echo "=== DEBUG LOG START ==="
         cat debug.log
         echo "=== DEBUG LOG END ==="
