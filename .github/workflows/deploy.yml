@@ -89,7 +89,8 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "/tmp/locust_results.csv"
         target: "./perf_stats.csv"
-        fail_on_error: false
+        overwrite: true
+      continue-on-error: true
 
     - name: Send Combined Report
       env:
