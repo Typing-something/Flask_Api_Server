@@ -110,20 +110,23 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # 파일 존재 및 권한 확인
+          RESULT_FILE="/home/ubuntu/locust_results.csv"
           if [ -f /tmp/locust_results.csv ]; then
             echo "✅ 파일 존재 확인: /tmp/locust_results.csv"
             ls -lh /tmp/locust_results.csv
             # 파일 내용 확인 (처음 몇 줄)
             head -5 /tmp/locust_results.csv
-            # 파일을 홈 디렉토리로 복사 (권한 문제 방지)
-            cp /tmp/locust_results.csv ~/locust_results.csv
-            chmod 644 ~/locust_results.csv
-            echo "✅ 파일 복사 완료: ~/locust_results.csv"
+            # 파일을 홈 디렉토리로 복사 (절대 경로 사용)
+            cp /tmp/locust_results.csv "$RESULT_FILE"
+            chmod 644 "$RESULT_FILE"
+            echo "✅ 파일 복사 완료: $RESULT_FILE"
+            ls -lh "$RESULT_FILE"
           else
             echo "⚠️ 파일이 없습니다. 빈 파일 생성 중..."
-            echo "Type,Name,Request Count,Failure Count" > ~/locust_results.csv
-            echo ",Aggregated,0,0" >> ~/locust_results.csv
-            chmod 644 ~/locust_results.csv
+            echo "Type,Name,Request Count,Failure Count" > "$RESULT_FILE"
+            echo ",Aggregated,0,0" >> "$RESULT_FILE"
+            chmod 644 "$RESULT_FILE"
+            echo "✅ 빈 파일 생성 완료: $RESULT_FILE"
           fi
 
     - name: Download File via SCP
@@ -132,7 +135,7 @@ jobs:
         host: "3.34.97.68"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: "~/locust_results.csv"
+        source: "/home/ubuntu/locust_results.csv"
         target: "./perf_stats.csv"
         overwrite: true
       continue-on-error: true
