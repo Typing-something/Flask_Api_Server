@@ -143,12 +143,13 @@ jobs:
             echo "Type,Name,Request Count,Failure Count"
             echo ",Aggregated,0,0"
           fi
-        script_stop: true
+        capture_stdout: true
     - name: Save Performance Stats
       run: |
         echo "${{ steps.download_file.outputs.stdout }}" > perf_stats.csv
         echo "✅ 파일 저장 완료: perf_stats.csv"
-        wc -l perf_stats.csv || true
+        echo "📊 파일 크기: $(wc -l < perf_stats.csv) lines"
+        head -3 perf_stats.csv || true
 
     - name: Send Combined Report
       env:
