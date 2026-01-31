@@ -159,14 +159,20 @@ jobs:
         # 실제 에러만 감지 (FATAL, 실패, 전송 실패 등)
         if grep -qiE "(FATAL|실패|전송 실패|치명적)" debug.log; then exit 1; fi
 
-    - name: Cleanup Test Data
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        LOCUST_TEST_USER_ID: ${{ secrets.LOCUST_TEST_USER_ID }}
-        FLASK_ENV: production
-        PYTHONPATH: .
-      run: |
-        echo "🧹 부하테스트 데이터 정리 시작..."
-        python cleanup_test_data.py --hours 2 || true
-        echo "✅ 데이터 정리 완료"
+    - name: Cleanup Test Data on EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: "3.34.97.68"
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/Flask_Api_Server
+          source venv/bin/activate
+          echo "🧹 부하테스트 데이터 정리 시작..."
+          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          export LOCUST_TEST_USER_ID="${{ secrets.LOCUST_TEST_USER_ID }}"
+          export FLASK_ENV=production
+          export PYTHONPATH=.
+          python cleanup_test_data.py --hours 2 || true
+          echo "✅ 데이터 정리 완료"
 
