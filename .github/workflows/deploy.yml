@@ -129,16 +129,26 @@ jobs:
             echo "✅ 빈 파일 생성 완료: $RESULT_FILE"
           fi
 
-    - name: Download File via SCP
-      uses: appleboy/scp-action@master
+    - name: Download File via SSH
+      id: download_file
+      uses: appleboy/ssh-action@master
       with:
         host: "3.34.97.68"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: "/home/ubuntu/locust_results.csv"
-        target: "./perf_stats.csv"
-        overwrite: true
-      continue-on-error: true
+        script: |
+          if [ -f /home/ubuntu/locust_results.csv ]; then
+            cat /home/ubuntu/locust_results.csv
+          else
+            echo "Type,Name,Request Count,Failure Count"
+            echo ",Aggregated,0,0"
+          fi
+        script_stop: true
+    - name: Save Performance Stats
+      run: |
+        echo "${{ steps.download_file.outputs.stdout }}" > perf_stats.csv
+        echo "✅ 파일 저장 완료: perf_stats.csv"
+        wc -l perf_stats.csv || true
 
     - name: Send Combined Report
       env:
