@@ -51,7 +51,7 @@ def run_commands():
         "--run-time", "15s",  # 30초로 증가 (10초는 너무 짧음)
         "--csv", "perf",
         "--host", target_host
-    ], check=True, capture_output=True, text=True)
+    ], check=False, capture_output=True, text=True)  # check=False로 변경하여 에러 상세 확인
     
     # Locust 실행 결과 확인
     print(f"📊 Locust 실행 완료 (exit code: {result.returncode})")
@@ -59,6 +59,13 @@ def run_commands():
         print(f"📝 Locust stdout 전체:\n{result.stdout}")
     if result.stderr:
         print(f"⚠️ Locust stderr:\n{result.stderr}")
+    
+    # Locust 실패 시 상세 에러 출력
+    if result.returncode != 0:
+        print(f"❌ Locust 실행 실패 (exit code: {result.returncode})")
+        if result.stderr:
+            print(f"🔍 상세 에러 메시지:\n{result.stderr}")
+        raise Exception(f"Locust 부하 테스트 실패: {result.stderr or '알 수 없는 오류'}")
     
     # 생성된 CSV 파일 확인
     import glob
