@@ -39,7 +39,7 @@ jobs:
           flask db upgrade
           sudo fuser -k 5000/tcp || true
           pm2 delete typing-server || true
-          pm2 start "gunicorn -w 4 -b 0.0.0.0:5000 --timeout 120 --max-requests 1000 --max-requests-jitter 50 'run:app'" --name typing-server --update-env
+          pm2 start "gunicorn -w 4 -b 0.0.0.0:5000 --timeout 120 --max-requests 1000 --max-requests-jitter 50 'run:app'" --name typing-server --no-autorestart --update-env
 
     - name: Wait for Server Restart
       run: sleep 30
@@ -64,21 +64,42 @@ jobs:
           
           # Locust 실행 (localhost로 요청)
           echo "🚀 EC2 내부에서 Locust 부하 테스트 시작 (localhost:5000)"
+          echo "📋 현재 디렉토리: $(pwd)"
+          echo "📋 Locust 파일 확인: $(ls -la tests/load/locustfile.py 2>&1 || echo '파일 없음')"
+          echo "📋 Locust 버전: $(locust --version 2>&1 || echo 'Locust 미설치')"
+          
+          # Locust 실행 (에러도 출력)
           locust -f tests/load/locustfile.py \
             --headless \
             -u 20 \
             -r 5 \
             --run-time 15s \
             --csv /tmp/perf \
-            --host http://localhost:5000 || true
+            --host http://localhost:5000 2>&1 | tee /tmp/locust_output.log || {
+            echo "❌ Locust 실행 실패"
+            cat /tmp/locust_output.log || true
+            LOCUST_EXIT_CODE=$?
+            echo "Exit code: $LOCUST_EXIT_CODE"
+          }
+          
+          # 결과 파일 확인
+          echo "📁 생성된 파일 확인:"
+          ls -la /tmp/perf* 2>&1 || echo "파일 없음"
           
           # 결과 파일을 특정 위치에 저장
           if [ -f /tmp/perf_stats.csv ]; then
             mv /tmp/perf_stats.csv /tmp/locust_results.csv
             echo "✅ Locust 결과 파일 생성 완료: /tmp/locust_results.csv"
+            echo "📊 파일 크기: $(wc -l < /tmp/locust_results.csv) lines"
           else
             echo "⚠️ Locust 결과 파일이 생성되지 않았습니다."
-            ls -la /tmp/perf* || true
+            echo "🔍 Locust 출력 로그:"
+            cat /tmp/locust_output.log 2>&1 || echo "로그 파일 없음"
+            # 빈 파일 생성 (scp 에러 방지)
+            touch /tmp/locust_results.csv
+            echo "Type,Name,Request Count,Failure Count" > /tmp/locust_results.csv
+            echo ",Aggregated,0,0" >> /tmp/locust_results.csv
+            echo "⚠️ 빈 결과 파일 생성 (부하테스트 실패)"
           fi
 
     - name: Download Locust Results from EC2
