@@ -8,7 +8,7 @@ from datetime import datetime
 from app.utils import api_response
 from sqlalchemy import func
 from flasgger import swag_from
-from .helpers import validate_result_data, update_user_statistics
+from .helpers import validate_result_data, update_user_statistics, recalculate_user_statistics
 
 # S3 클라이언트 설정 (환경변수 로드)
 s3 = boto3.client('s3',
@@ -616,13 +616,27 @@ def delete_specific_result(text_id, user_id, result_id):
 
         # 2. 삭제 수행
         db.session.delete(result)
-        db.session.commit()
-
-        current_app.logger.info(f"🗑️ [결과삭제] 유저 {user_id}의 기록 {result_id} 삭제 완료 (Locust Cleanup)")
+        db.session.flush()  # 삭제를 먼저 반영
+        
+        # 3. 유저 통계 재계산 (SQL 집계 함수 활용)
+        recalculated_stats = recalculate_user_statistics(user_id)
+        if recalculated_stats:
+            db.session.commit()
+            current_app.logger.info(f"🗑️ [결과삭제] 유저 {user_id}의 기록 {result_id} 삭제 및 통계 재계산 완료")
+        else:
+            db.session.rollback()
+            return api_response(
+                success=False,
+                message="유저를 찾을 수 없습니다.",
+                status_code=404
+            )
 
         return api_response(
             success=True, 
-            message="연습 기록이 성공적으로 삭제되었습니다."
+            data={
+                "updated_stats": recalculated_stats
+            },
+            message="연습 기록이 성공적으로 삭제되었고 유저 통계가 재계산되었습니다."
         )
 
     except Exception as e:

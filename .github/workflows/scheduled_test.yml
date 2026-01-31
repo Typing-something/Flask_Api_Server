@@ -1,13 +1,12 @@
-name: CI Test, Report and Deploy
+name: Scheduled Load Test and Report
 
 on:
-  push:
-    branches: [ "main" ]
   schedule:
     - cron: '*/11 * * * *'
   workflow_dispatch:
+
 jobs:
-  test-and-deploy:
+  load-test-and-report:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +24,7 @@ jobs:
         pip install -r requirements.txt
         pip install pytest-json-report locust requests
 
-    - name: Pre-deployment Check (Pytest)
+    - name: Run Pytest
       env:
         PYTHONPATH: .
         DATABASE_URL: "sqlite:///:memory:"
@@ -33,29 +32,7 @@ jobs:
       run: |
         pytest --json-report --json-report-file=result.json
 
-    - name: Deploy to EC2 via SSH
-      if: github.event_name == 'push'
-      uses: appleboy/ssh-action@master
-      with:
-        host: "3.34.97.68"
-        username: ubuntu
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          cd /home/ubuntu/Flask_Api_Server
-          git fetch --all
-          git reset --hard origin/main
-          source venv/bin/activate
-          pip install -r requirements.txt
-          flask db upgrade
-          sudo fuser -k 5000/tcp || true
-          pm2 delete typing-server || true
-          pm2 start "python run.py" --name typing-server --update-env
-
-    - name: Wait for Server Restart
-      if: github.event_name == 'push'
-      run: sleep 20
-
-    - name: Post-deployment Load Test & Report
+    - name: Load Test & Report
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -89,3 +66,4 @@ jobs:
         echo "🧹 부하테스트 데이터 정리 시작..."
         python cleanup_test_data.py --hours 2 || true
         echo "✅ 데이터 정리 완료"
+
