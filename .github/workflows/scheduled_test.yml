@@ -2,7 +2,7 @@ name: Scheduled Load Test and Report
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 0,7,14,21 * * *'
   workflow_dispatch:
 
 jobs:
