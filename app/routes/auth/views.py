@@ -62,13 +62,13 @@ def google_login():
             db.session.add(user)
             db.session.commit()
 
-            user.ranking_score = user.id
+            user.ranking_score = 0
             db.session.commit()
             message = "회원가입 및 로그인 성공"
         else:
             user.profile_pic = profile_pic
             if user.ranking_score is None:
-                user.ranking_score = user.id
+                user.ranking_score = 0
             db.session.commit()
             message = "로그인 성공"
 
@@ -158,7 +158,7 @@ if os.getenv('ENV') == 'testing':
                 db.session.add(user)
                 db.session.commit()
                 
-                user.ranking_score = user.id
+                user.ranking_score = 0
                 db.session.commit()
                 message = "테스트 회원가입 및 로그인 성공"
             else:
