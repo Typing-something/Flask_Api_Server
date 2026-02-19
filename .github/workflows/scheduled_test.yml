@@ -20,9 +20,13 @@ jobs:
 
     - name: Fix requirements.txt encoding (UTF-16 -> UTF-8)
       run: |
-        if file requirements.txt | grep -qE "UTF-16|Unicode"; then
-          iconv -f UTF-16LE -t UTF-8 requirements.txt > requirements_fixed.txt && mv requirements_fixed.txt requirements.txt
-        fi
+        python -c "
+        with open('requirements.txt', 'rb') as f: raw = f.read()
+        if raw[:2] == b'\xff\xfe' or (len(raw) > 1 and raw[1:2] == b'\x00'):
+            text = raw.decode('utf-16-le')
+            with open('requirements.txt', 'w', encoding='utf-8') as f: f.write(text)
+            print('Converted UTF-16 to UTF-8')
+        "
 
     - name: Install dependencies
       run: |
