@@ -42,6 +42,22 @@ jobs:
       run: |
         pytest --json-report --json-report-file=result.json
 
+    - name: Cleanup Test User Before Load Test (EC2)
+      uses: appleboy/ssh-action@master
+      with:
+        host: "3.34.97.68"
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/Flask_Api_Server
+          source venv/bin/activate
+          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          export LOCUST_TEST_USER_ID="${{ secrets.LOCUST_TEST_USER_ID }}"
+          export FLASK_ENV=production
+          export PYTHONPATH=.
+          python cleanup_test_data.py --keep 100 || true
+          echo "✅ 부하테스트 유저 기록 최근 100개만 유지"
+
     - name: Run Load Test on EC2 (localhost)
       uses: appleboy/ssh-action@master
       with:
