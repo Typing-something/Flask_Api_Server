@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, current_app
 from app.models import User, TypingResult, TypingText
 from app.utils import api_response
 from app.database import db
+from app.redis_client import cache_get, cache_set
 from flasgger import swag_from
 
 
@@ -24,6 +25,13 @@ GET_USER_FAVORITE_META_YAML_PATH = os.path.join(BASE_DIR, 'swagger', 'get_user_f
 @swag_from(GET_USER_PROFILE_YAML_PATH)
 def get_user_profile(user_id):
     try:
+        # Redis 캐시 조회
+        cache_key = f"user:profile:{user_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            current_app.logger.info(f"👤 [프로필조회] 유저 {user_id} Redis 캐시 히트")
+            return api_response(success=True, data=cached["data"], message=cached["message"])
+
         user = User.query.get(user_id)
         if not user:
             return api_response(success=False, error_code=404, message="유저를 찾을 수 없습니다.", status_code=404)
@@ -50,6 +58,8 @@ def get_user_profile(user_id):
 
         current_app.logger.info(f"👤 [프로필조회] 유저 {user.username}(ID:{user.id})의 모든 정보를 조회했습니다.")
 
+        cache_set(cache_key, {"data": data, "message": "프로필 및 모든 통계 정보를 성공적으로 가져왔습니다."})
+
         return api_response(
             success=True, 
             data=data, 
@@ -65,6 +75,13 @@ def get_user_profile(user_id):
 @swag_from(GET_ALL_USER_PROFILE_YAML_PATH)
 def get_all_users():
     try:
+        # Redis 캐시 조회
+        cache_key = "user:users:all"
+        cached = cache_get(cache_key)
+        if cached:
+            current_app.logger.info(f"📋 [전체유저조회] Redis 캐시 히트 ({cached['data']['users_len']}명)")
+            return api_response(success=True, data=cached["data"], message=cached["message"])
+
         # 1. 모든 유저 정보를 DB에서 가져옵니다.
         users = User.query.all()
 
@@ -92,9 +109,12 @@ def get_all_users():
 
         current_app.logger.info(f" 데이터 누락 없이 총 {len(user_list)}명의 정보를 전송합니다.")
 
+        data = {"users": user_list, "users_len": len(user_list)}
+        cache_set(cache_key, {"data": data, "message": "모든 유저의 상세 데이터를 성공적으로 가져왔습니다."})
+
         return api_response(
             success=True, 
-            data={"users": user_list, "users_len" : len(user_list) }, 
+            data=data, 
             message="모든 유저의 상세 데이터를 성공적으로 가져왔습니다."
         )
 
@@ -243,9 +263,15 @@ def get_history_by_genre(user_id):
 @user_blueprint.route('/ranking', methods=['GET'])
 @swag_from(GET_USER_RANKING_YAML_PATH)
 def get_user_ranking():
-  
     try:
         limit_val = request.args.get('limit', default=10, type=int)
+
+        # Redis 캐시 조회
+        cache_key = f"user:ranking:{limit_val}"
+        cached = cache_get(cache_key)
+        if cached:
+            current_app.logger.info(f"🏆 [랭킹조회] Redis 캐시 히트 (TOP {limit_val})")
+            return api_response(success=True, data=cached["data"], message=cached["message"])
 
         # ranking_score 내림차순 정렬
         top_users = User.query.filter(User.ranking_score != None)\
@@ -275,6 +301,11 @@ def get_user_ranking():
             })
 
         current_app.logger.info(f"🏆 [랭킹조회] TOP {limit_val} 유저 데이터 반환 완료")
+
+        cache_set(cache_key, {
+            "data": ranking_list,
+            "message": f"상위 {len(ranking_list)}명의 상세 정보를 성공적으로 가져왔습니다."
+        })
 
         return api_response(
             success=True,

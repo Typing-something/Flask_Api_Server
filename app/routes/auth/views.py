@@ -4,6 +4,7 @@ from app.models import User
 from app.database import db
 from flask_login import login_user, logout_user, login_required, current_user
 from app.utils import api_response
+from app.redis_client import invalidate_user_cache
 import uuid
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -64,6 +65,7 @@ def google_login():
 
             user.ranking_score = 0
             db.session.commit()
+            invalidate_user_cache()
             message = "회원가입 및 로그인 성공"
         else:
             user.profile_pic = profile_pic
@@ -119,7 +121,8 @@ def user_out():
 
         db.session.delete(user)
         db.session.commit()
-        
+        invalidate_user_cache()  # 랭킹·전체유저 캐시 갱신
+
         return api_response(success=True, message="회원 탈퇴 및 모든 데이터 삭제가 완료되었습니다.")
 
     except ValueError:

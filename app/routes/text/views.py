@@ -9,6 +9,7 @@ from app.utils import api_response
 from sqlalchemy import func
 from flasgger import swag_from
 from .helpers import validate_result_data, update_user_statistics, recalculate_user_statistics
+from app.redis_client import invalidate_user_cache
 
 # S3 클라이언트 설정 (환경변수 로드)
 s3 = boto3.client('s3',
@@ -386,6 +387,9 @@ def save_typing_result():
         # 4. 최종 DB 반영
         db.session.commit()
 
+        # 5. 유저 캐시 무효화 (랭킹·프로필·전체유저 갱신)
+        invalidate_user_cache()
+
         current_app.logger.info(f"🏆 유저 {user.username} 결과 저장 및 랭킹 점수({user.ranking_score}) 갱신 완료")
 
         return api_response(
@@ -622,6 +626,7 @@ def delete_specific_result(text_id, user_id, result_id):
         recalculated_stats = recalculate_user_statistics(user_id)
         if recalculated_stats:
             db.session.commit()
+            invalidate_user_cache()
             current_app.logger.info(f"🗑️ [결과삭제] 유저 {user_id}의 기록 {result_id} 삭제 및 통계 재계산 완료")
         else:
             db.session.rollback()

@@ -123,7 +123,19 @@ def create_app(config_mode=None):
         except Exception as e:
             app.logger.error(f"❌ DB 연결 실패! 설정을 확인하세요.")
             app.logger.error(f"👉 에러 내용: {str(e)}")
-        
+
+        # Redis 초기화 (선택적 - REDIS_URL 설정 시 캐시 활성화)
+        try:
+            from app.redis_client import init_redis
+            if init_redis():
+                app.logger.info("✅ Redis 캐시 연결 성공")
+            elif os.getenv("REDIS_URL"):
+                app.logger.warning("⚠️ Redis 연결 실패 - 캐시 없이 동작")
+            else:
+                app.logger.info("ℹ️ Redis 미설정 - 캐시 없이 동작")
+        except Exception as e:
+            app.logger.warning(f"ℹ️ Redis 초기화 생략: {e}")
+
         app.logger.info("="*50)
 
     return app
