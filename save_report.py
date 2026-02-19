@@ -46,9 +46,9 @@ def run_commands():
         "locust", 
         "-f", "tests/load/locustfile.py",
         "--headless", 
-        "-u", "20", 
+        "-u", "30", 
         "-r", "5", 
-        "--run-time", "15s",  # 30초로 증가 (10초는 너무 짧음)
+        "--run-time", "20s",
         "--csv", "perf",
         "--host", target_host
     ], check=False, capture_output=True, text=True)  # check=False로 변경하여 에러 상세 확인

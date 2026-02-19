@@ -77,9 +77,9 @@ jobs:
           # Locust 실행 (에러도 출력)
           locust -f tests/load/locustfile.py \
             --headless \
-            -u 50 \
-            -r 10 \
-            --run-time 30s \
+            -u 30 \
+            -r 5 \
+            --run-time 20s \
             --csv /tmp/perf \
             --host http://localhost:5000 2>&1 | tee /tmp/locust_output.log || {
             echo "❌ Locust 실행 실패"
