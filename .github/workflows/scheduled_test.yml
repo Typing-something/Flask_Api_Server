@@ -1,9 +1,9 @@
 name: Scheduled Load Test and Report
 
 on:
-  # schedule:
-  #   - cron: '0 0 * * *'  # 매일 자정(UTC) = 한국 시간 오전 9시에 한 번만 실행 (일시 비활성화)
-  workflow_dispatch:  # 수동 실행만 가능
+  schedule:
+    - cron: '0 */12 * * *'  # 12시간마다 (00:00 UTC, 12:00 UTC = 한국 09:00, 21:00)
+  workflow_dispatch:  # 수동 실행도 가능
 
 jobs:
   load-test-and-report:

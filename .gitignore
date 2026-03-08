@@ -51,3 +51,6 @@ htmlcov/
 application.log    # 특정 파일 지칭
 *.log              # 모든 .log 확장자 파일 제외 ㅋ
 logs/              # 만약 logs 폴더를 따로 쓴다면 폴더 통째로 제외
+
+# --- 문서/포트폴리오 (원격 저장소에 올리지 않음) ---
+DOSC/
