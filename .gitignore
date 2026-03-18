@@ -54,3 +54,4 @@ logs/              # 만약 logs 폴더를 따로 쓴다면 폴더 통째로 제
 
 # --- 문서/포트폴리오 (원격 저장소에 올리지 않음) ---
 DOSC/
+PROJECT_DESCRIPTION.md
