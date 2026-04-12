@@ -43,7 +43,7 @@ jobs:
     - name: Cleanup Test User Before Load Test (EC2)
       uses: appleboy/ssh-action@master
       with:
-        host: "3.34.97.68"
+        host: "13.124.136.43"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
@@ -59,7 +59,7 @@ jobs:
     - name: Run Load Test on EC2 (localhost)
       uses: appleboy/ssh-action@master
       with:
-        host: "3.34.97.68"
+        host: "13.124.136.43"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
@@ -109,7 +109,7 @@ jobs:
     - name: Download Locust Results from EC2
       uses: appleboy/ssh-action@master
       with:
-        host: "3.34.97.68"
+        host: "13.124.136.43"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
@@ -137,7 +137,7 @@ jobs:
       id: download_file
       uses: appleboy/ssh-action@master
       with:
-        host: "3.34.97.68"
+        host: "13.124.136.43"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
@@ -180,7 +180,7 @@ jobs:
     - name: Cleanup Test Data on EC2
       uses: appleboy/ssh-action@master
       with:
-        host: "3.34.97.68"
+        host: "13.124.136.43"
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
